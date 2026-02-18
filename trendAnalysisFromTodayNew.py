@@ -557,7 +557,10 @@ def make_prediciton_test( model, raw_df: DataFrame, param: dict[str], currentDat
     model.eval()  # Set to evaluation mode
 
     # If you're using a GPU
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+    print("Using device:", device)
+
     model = model.to(device)
 
     with torch.no_grad():
@@ -794,6 +797,11 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     # Check if CUDA (GPU support) is available and use it, otherwise use CPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+    # Move class weights to same device as model before creating criterion
+    class_weights_tensor = class_weights_tensor.to(device)
+    if num_classes > 1:
+        criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+
     # Move your model to the device
     model.to(device)
 
@@ -910,6 +918,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     for inputs, labels in test_loader:
         # Forward pass and get predictions
         # Make sure to move your inputs and labels to the same device as your model
+        inputs = inputs.to(device)
         outputs = model(inputs)
         preds = torch.argmax(outputs, dim=-1)
         

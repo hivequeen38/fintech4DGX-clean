@@ -4,7 +4,7 @@ import imaplib
 import email
 import re
 import io
-import PyPDF2
+# import PyPDF2
 from typing import List, Tuple
 import get_osillator
 

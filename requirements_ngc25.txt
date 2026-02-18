@@ -1,0 +1,36 @@
+# Project dependencies for NGC 25.11+ (PyTorch, RAPIDS, CUDA pre-installed in container)
+# Do NOT install flash_attn - use PyTorch native SDPA instead (faster on Blackwell)
+# Do NOT re-install torch, cudf, cuml, rapids - already in container
+
+# Financial data
+alpha-vantage==2.3.1
+yfinance==0.2.43
+pandas-datareader==0.10.0
+openpyxl==3.1.5
+xlrd==2.0.1
+
+# Google Cloud
+google-cloud-storage==2.14.0
+google-auth==2.23.4
+google-api-python-client==2.107.0
+
+# Notifications
+twilio==8.12.0
+vonage==3.13.0
+
+# ML utilities (may already be in container, safe to re-run)
+scikit-learn==1.3.2
+joblib==1.3.2
+shap==0.46.0
+
+# Viz
+matplotlib==3.8.2
+seaborn==0.13.2
+
+# Utilities
+pandas==2.2.1
+numpy==1.26.1
+requests==2.31.0
+python-dateutil==2.8.2
+pytz==2023.3.post1
+tqdm==4.66.1

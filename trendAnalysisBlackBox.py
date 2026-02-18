@@ -635,7 +635,9 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
 
 
     # Check if CUDA (GPU support) is available and use it, otherwise use CPU
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cpu")
+    print("Using device:", device)  
 
     # Move your model to the device
     model.to(device)

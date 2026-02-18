@@ -2612,6 +2612,9 @@ def fetch_all_data(config, param):
         # only process cp ratio if this stock is configured to use it
         print('>Get Call/Put ratio data (OLD WAY)')
         file_path = symbol + '-cp_ratios_sentiment.csv'
+        if not os.path.isfile(file_path):
+            print(f'Warning: {file_path} not found. cp_sentiment_ratio will be 0.')
+            df['cp_sentiment_ratio'] = 0.0
         if os.path.isfile(file_path):
             # file exist
             df_cp_ratios = pd.read_csv(file_path)
@@ -2677,6 +2680,10 @@ def fetch_all_data(config, param):
             #in this case use the new code with options ratio
             print('>Get Call/Put ratio data (new WAY with options volume ratio)')
             file_path = symbol + '-cp_ratios_sentiment_w_volume.csv'
+            if not os.path.isfile(file_path):
+                print(f'Warning: {file_path} not found. cp_sentiment_ratio and options_volume_ratio will be 0.')
+                df['cp_sentiment_ratio'] = 0.0
+                df['options_volume_ratio'] = 0.0
             if os.path.isfile(file_path):
                 # file exist
                 df_cp_ratios = pd.read_csv(file_path)

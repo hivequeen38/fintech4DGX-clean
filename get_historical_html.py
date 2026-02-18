@@ -60,33 +60,18 @@ INITIAL_HTML = """<!DOCTYPE html>
                 <td></td>
                 <td><a href=""></a></td>
             </tr>
-              <tr>
-                <td>SMCI</td>
+            <tr>
+                <td>CRDO</td>
+                <td></td>
+                <td><a href=""></a></td>
+            </tr>
+            <tr>
+                <td>INOD</td>
                 <td></td>
                 <td><a href=""></a></td>
             </tr>
             <tr>
                 <td>APP</td>
-                <td></td>
-                <td><a href=""></a></td>
-            </tr>
-            <tr>
-                <td>INDO</td>
-                <td></td>
-                <td><a href=""></a></td>
-            </tr>
-            <tr>
-                <td>META</td>
-                <td></td>
-                <td><a href=""></a></td>
-            </tr>
-            <tr>
-                <td>MSTR</td>
-                <td></td>
-                <td><a href=""></a></td>
-            </tr>
-             <tr>
-                <td>ANET</td>
                 <td></td>
                 <td><a href=""></a></td>
             </tr>
@@ -682,11 +667,14 @@ def update_stock_table(main_html_path="stock_trends.html"):
     return main_html_path
 
 
-def upload_all_results(input_date_str: str = None):
+def upload_all_results(input_date_str: str = None, upload_to_cloud: bool = True):
 
     oscillator_input = get_osillator.get_oscillator(input_date_str)
-    # create a list of files for each sstock to be uploaded (they should exist already
-    stocks = ['NVDA', 'PLTR', 'APP', 'ANET', 'CRDO', 'ALAB', 'TSLA' ]
+    stocks = ['NVDA', 'PLTR', 'CRDO', 'INOD', 'APP']
+
+    # Always rebuild stock_trends.html from the local template — never use an existing/cloud copy
+    with open("stock_trends.html", 'w', encoding='utf-8') as f:
+        f.write(INITIAL_HTML)
 
     for stock in stocks:
         df = pd.read_csv(stock + '_15d_from_today_predictions.csv')
@@ -694,12 +682,12 @@ def upload_all_results(input_date_str: str = None):
 
         # filter out all (QA) entries
         # Create mask for rows that don't contain the phrase
-        # delete checking for closeing bracket) 
+        # delete checking for closeing bracket)
         mask = ~recent_df['comment'].str.contains('QA', na=False)
-    
+
         # Apply mask to get filtered DataFrame
         filtered_df = recent_df[mask]
-        
+
         # Generate the HTML file
         output_file = generate_historical_html(
             df=filtered_df,
@@ -707,10 +695,16 @@ def upload_all_results(input_date_str: str = None):
             oscillator_value=oscillator_input  # Optional
         )
         # file_path = f'{stock}_result.html'
-        google_cloud_util.upload_file_to_bucket('ml-prediction-results', output_file)
+        if upload_to_cloud:
+            google_cloud_util.upload_file_to_bucket('ml-prediction-results', output_file)
+        else:
+            print(f"Local only: {output_file}")
 
     main_html_path = update_stock_table(main_html_path="stock_trends.html")
-    main_file_url = google_cloud_util.upload_file_to_bucket('ml-prediction-results', main_html_path)
+    if upload_to_cloud:
+        google_cloud_util.upload_file_to_bucket('ml-prediction-results', main_html_path)
+    else:
+        print(f"Local only: {main_html_path}")
 
 if __name__ == "__main__":
     upload_all_results('2025-02-21')
