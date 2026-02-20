@@ -456,18 +456,17 @@ class TrendBasedStopping:
         
         return False
 
-def train_with_trend_based_stopping(model, train_loader, val_loader, num_epochs, optimizer, 
+def train_with_trend_based_stopping(model, train_loader, val_loader, num_epochs, optimizer,
                             criterion, device, scheduler=None, l1_lambda=0):
-    # Initialize early stopping
-    # stopping = analysisUtil.LossIncreaseStopping(
-    #     threshold=0.01,  # Stop if loss increases by more than 1%
-    #     consecutive_checks=2  # Need 2 consecutive increases to stop
-    # )
     stopping = TrendBasedStopping(
         window_size=10,  # Look at trends over 5 epochs
         threshold=0.05  # Stop if trend shows 1% increase per epoch
     )
-        
+
+    # Mixed precision: use AMP on CUDA, plain fp32 on CPU
+    use_amp = (device.type == 'cuda')
+    scaler = torch.amp.GradScaler(enabled=use_amp)
+
     for epoch in range(num_epochs):
         # Training phase
         total_loss = 0
@@ -475,25 +474,28 @@ def train_with_trend_based_stopping(model, train_loader, val_loader, num_epochs,
         for inputs, labels in train_loader:
             inputs = inputs.to(device, dtype=torch.float32)
             labels = labels.to(device, dtype=torch.long)
-            
+
             optimizer.zero_grad()
-            outputs = model(inputs)
-            
-            num_classes = outputs.size(-1)
-            outputs = outputs.view(-1, num_classes)
-            labels = labels.view(-1)
-            
-            loss = criterion(outputs, labels)
-            
-            # L1 regularization if specified
-            if l1_lambda > 0:
-                l1_norm = sum(p.abs().sum() for name, p in model.named_parameters() 
-                            if 'weight' in name)
-                loss = loss + l1_lambda * l1_norm
-                
-            loss.backward()
-            optimizer.step()
-            
+
+            with torch.amp.autocast(device_type='cuda', enabled=use_amp):
+                outputs = model(inputs)
+
+                num_classes = outputs.size(-1)
+                outputs = outputs.view(-1, num_classes)
+                labels_flat = labels.view(-1)
+
+                loss = criterion(outputs, labels_flat)
+
+                # L1 regularization if specified
+                if l1_lambda > 0:
+                    l1_norm = sum(p.abs().sum() for name, p in model.named_parameters()
+                                if 'weight' in name)
+                    loss = loss + l1_lambda * l1_norm
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
             total_loss += loss.item()
         
         avg_loss = total_loss / len(train_loader)

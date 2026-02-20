@@ -4,6 +4,7 @@ from typing import Optional
 from bs4 import BeautifulSoup
 import os
 from datetime import datetime
+import pytz
 import google_cloud_util
 import get_osillator
 
@@ -623,9 +624,13 @@ def update_stock_table(main_html_path="stock_trends.html"):
         csv_file = f"{stock}_15d_from_today_predictions.csv"
         
         if os.path.exists(csv_file):
-            file_timestamp = datetime.fromtimestamp(os.path.getmtime(csv_file))
-            timestamp_str = file_timestamp.strftime('%Y-%m-%d %H:%M:%S')
-            
+            # File timestamps are in UTC, convert to US Eastern
+            utc = pytz.UTC
+            eastern = pytz.timezone('US/Eastern')
+            file_timestamp_utc = datetime.fromtimestamp(os.path.getmtime(csv_file), tz=utc)
+            file_timestamp_eastern = file_timestamp_utc.astimezone(eastern)
+            timestamp_str = file_timestamp_eastern.strftime('%Y-%m-%d %H:%M:%S')
+
             # Update with the CSV file's timestamp - ensure string is properly set
             time_cell = row.find_all('td')[1]
             time_cell.clear()  # Clear existing content
@@ -633,8 +638,11 @@ def update_stock_table(main_html_path="stock_trends.html"):
             print(f"Updated {stock} timestamp to {timestamp_str} from CSV file")
         else:
             print(f"Warning: CSV file {csv_file} not found, using result file timestamp instead")
-            result_timestamp = datetime.fromtimestamp(os.path.getmtime(result_file))
-            timestamp_str = result_timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            utc = pytz.UTC
+            eastern = pytz.timezone('US/Eastern')
+            result_timestamp_utc = datetime.fromtimestamp(os.path.getmtime(result_file), tz=utc)
+            result_timestamp_eastern = result_timestamp_utc.astimezone(eastern)
+            timestamp_str = result_timestamp_eastern.strftime('%Y-%m-%d %H:%M:%S')
             time_cell = row.find_all('td')[1]
             time_cell.clear()  # Clear existing content
             time_cell.append(timestamp_str)  # Add new content

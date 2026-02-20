@@ -7,6 +7,7 @@ import sys
 import logging      
 import time
 from datetime import datetime
+import pytz
 import trendConfig
 import trendAnalysisBlackBox
 import trendAnalysisFromTodayNew
@@ -128,12 +129,14 @@ def processDeltaFromTodayResults( symbol: str, incr_df: DataFrame, dateStr: str,
 # PROCESS END DATE
 def QA_processEndDate ( param, target_date: str, load_cache: bool = True, comment: str = ""):
     param['end_date'] = target_date
-    run_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+    eastern = pytz.timezone('US/Eastern')
+    run_date = datetime.now(eastern).strftime('%Y-%m-%d %H:%M')
     main(param, end_date = target_date, run_date= run_date, input_comment=comment + target_date, load_cache = load_cache)
 
 def QA_mz_processEndDate ( param, target_date: str, load_cache: bool = True, comment: str = ""):
     param['end_date'] = target_date
-    run_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+    eastern = pytz.timezone('US/Eastern')
+    run_date = datetime.now(eastern).strftime('%Y-%m-%d %H:%M')
     mz_main(param, run_date= run_date, input_comment=comment + target_date, load_cache = load_cache)
 
 def process_first_5_days(param, incr_df, turn_random_on: bool, comment: str, use_timesplit: bool=False):
@@ -200,7 +203,8 @@ def mz_main(param: dict[str], run_date=None, input_comment=None, load_cache=True
     logging.basicConfig(level=logging.INFO)
 
     if (run_date is None):
-        run_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+        eastern = pytz.timezone('US/Eastern')
+    run_date = datetime.now(eastern).strftime('%Y-%m-%d %H:%M')
 
     if (input_comment is None):
         input_comment = ''
@@ -224,7 +228,8 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
     logging.basicConfig(level=logging.INFO)
 
     if (run_date is None):
-        run_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+        eastern = pytz.timezone('US/Eastern')
+    run_date = datetime.now(eastern).strftime('%Y-%m-%d %H:%M')
 
     if (end_date is None):
         end_date = datetime.now().strftime('%Y-%m-%d')
@@ -319,7 +324,8 @@ def inference(param: dict[str], run_date=None, input_comment=None, load_cache=Tr
     logging.basicConfig(level=logging.INFO)
 
     if (run_date is None):
-        run_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+        eastern = pytz.timezone('US/Eastern')
+    run_date = datetime.now(eastern).strftime('%Y-%m-%d %H:%M')
 
     if (input_comment is None):
         input_comment = ''

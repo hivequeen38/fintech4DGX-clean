@@ -165,7 +165,7 @@ AAII_option_vol_ratio = {
     "num_zones": 15,
     "test_size": 0.2,
     "validation_size": 0.25,
-    "batch_size": 32,       # best amongst 25, 32, and 40
+    "batch_size": 128,      # increased from 32 for better GPU utilization
     "shuffle": False,       # even though turning it on improves things, should not do it for time series data
     "headcount": 8,         
     "num_layers": 2,            # 2 MUCH BETTER THAN 3
@@ -180,7 +180,7 @@ AAII_option_vol_ratio = {
     "validation_set_size": 195,
     "l1_lambda": 1e-6,          # This better than 0.5e-6
     "l2_weight_decay": 1.6e-5,  # 1.6 seems best
-    "embedded_dim": 64         # default to 64
+    "embedded_dim": 128        # increased from 64 for model capacity
 }   # AAII_option_vol_ratio
 
 AAII_reference = {
@@ -349,7 +349,7 @@ AAII_reference = {
     "num_zones": 15,
     "test_size": 0.2,
     "validation_size": 0.25,
-    "batch_size": 32,       # best amongst 25, 32, and 40
+    "batch_size": 128,      # increased from 32 for better GPU utilization
     "shuffle": False,       # even though turning it on improves things, should not do it for time series data
     "headcount": 8,         
     "num_layers": 2,            # 2 MUCH BETTER THAN 3
@@ -364,7 +364,7 @@ AAII_reference = {
     "validation_set_size": 195,
     "l1_lambda": 1e-6,          # This better than 0.5e-6
     "l2_weight_decay": 1.6e-5,  # 1.6 seems best
-    "embedded_dim": 64         # default to 64
+    "embedded_dim": 128        # increased from 64 for model capacity
 }   # AAII_reference
 
 reference = {
@@ -524,7 +524,7 @@ reference = {
     "num_zones": 15,
     "test_size": 0.2,
     "validation_size": 0.25,
-    "batch_size": 32,       # best amongst 25, 32, and 40
+    "batch_size": 128,      # increased from 32 for better GPU utilization
     "shuffle": False,       # even though turning it on improves things, should not do it for time series data
     "headcount": 8,         
     "num_layers": 2,            # 2 MUCH BETTER THAN 3
@@ -539,5 +539,5 @@ reference = {
     "validation_set_size": 195,
     "l1_lambda": 1e-6,          # This better than 0.5e-6
     "l2_weight_decay": 1.6e-5,  # 1.6 seems best
-    "embedded_dim": 64         # default to 64
+    "embedded_dim": 128        # increased from 64 for model capacity
 }   # CRDO_ref_param

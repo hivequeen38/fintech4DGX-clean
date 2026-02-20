@@ -29,6 +29,7 @@ import json
 import time
 from datetime import datetime
 from datetime import timedelta
+import pytz
 import os
 import math
 import fetchBulkData
@@ -838,7 +839,8 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         time_split_str = 'noTimesplit'
 
     
-    currentDateTime = datetime.now()
+    eastern = pytz.timezone('US/Eastern')
+    currentDateTime = datetime.now(eastern)
     date = currentDateTime.strftime("%Y-%m-%d %H:%M:%S")
 
     # save model to folder /model
@@ -877,7 +879,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         # Flatten the arrays
         preds_flat = preds.cpu().numpy().flatten()    # Shape: [batch_size * seq_length]
         labels_flat = labels.cpu().numpy().flatten()  # Shape: [batch_size * seq_length]
-            
+
         y_preds = np.concatenate((y_preds, preds_flat))
         y_trues = np.concatenate((y_trues, labels_flat))
 
@@ -921,10 +923,10 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         inputs = inputs.to(device)
         outputs = model(inputs)
         preds = torch.argmax(outputs, dim=-1)
-        
+
         test_preds_flat = preds.cpu().numpy().flatten()    # Shape: [batch_size * seq_length]
         test_labels_flat = labels.cpu().numpy().flatten()  # Shape: [batch_size * seq_length]
-            
+
         test_preds = np.concatenate((test_preds, test_preds_flat))
         test_trues = np.concatenate((test_trues, test_labels_flat))
 
@@ -984,7 +986,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         # Reshape probabilities and labels to 2D arrays
         batch_size, seq_length, num_classes = probabilities.shape
         probabilities_flat = probabilities.view(-1, num_classes)  # Shape: [batch_size * seq_length, num_classes]
-        labels_flat = labels.view(-1)            
+        labels_flat = labels.view(-1)
 
         # y_probs.append(probabilities.cpu().numpy())
         # Convert to CPU and NumPy arrays
@@ -1174,8 +1176,9 @@ def make_inference( config: dict[str, str], param: dict[str], current_day_offset
 
     ############################################################
     # Now make prediction
-    # 
-    currentDateTime = datetime.now()
+    #
+    eastern = pytz.timezone('US/Eastern')
+    currentDateTime = datetime.now(eastern)
     if (use_cached_data):
         symbol = param['symbol']
         file_path = symbol + '_TMP.csv'  
