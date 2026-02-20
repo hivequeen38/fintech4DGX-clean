@@ -2681,7 +2681,11 @@ def fetch_all_data(config, param):
             print('>Get Call/Put ratio data (new WAY with options volume ratio)')
             file_path = symbol + '-cp_ratios_sentiment_w_volume.csv'
             if not os.path.isfile(file_path):
-                print(f'Warning: {file_path} not found. cp_sentiment_ratio and options_volume_ratio will be 0.')
+                print(f'')
+                print(f'⚠️ ⚠️ ⚠️  ALERT: {file_path} not found!')
+                print(f'⚠️  cp_sentiment_ratio and options_volume_ratio will be set to 0.0')
+                print(f'⚠️  This will result in missing feature data for the model!')
+                print(f'')
                 df['cp_sentiment_ratio'] = 0.0
                 df['options_volume_ratio'] = 0.0
             if os.path.isfile(file_path):
@@ -2746,6 +2750,16 @@ def fetch_all_data(config, param):
                 # calculate volume ratio
                 df ['options_volume'] = df['call_volume'] + df['put_volume']
                 df['options_volume_ratio'] = df['options_volume'] / df['volume']
+
+                # VALIDATION: Alert if options_volume_ratio is all zeros
+                non_zero_count = (df['options_volume_ratio'] > 0).sum()
+                total_count = len(df)
+                if non_zero_count == 0:
+                    print(f"⚠️  ALERT: options_volume_ratio is ALL ZEROS for {symbol}! This indicates missing CP ratio data.")
+                elif non_zero_count < total_count * 0.5:
+                    print(f"⚠️  WARNING: options_volume_ratio has {non_zero_count}/{total_count} non-zero values for {symbol} (less than 50%)")
+                else:
+                    print(f"✓ options_volume_ratio validation OK: {non_zero_count}/{total_count} non-zero values for {symbol}")
     # df.to_csv('debug_post_netIncome_merge.csv')
 
     # Create an unfragmented copy of the DataFrame
