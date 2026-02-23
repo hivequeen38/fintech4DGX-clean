@@ -391,18 +391,18 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
     table_rows = []
     
     # Sort DataFrame by date (descending) and then by comment
-    df_sorted = df.sort_values(['date', 'comment'], ascending=[False, True])
-    
+    df_sorted = df.sort_values(['date', 'comment'], ascending=[False, False])
+
     # Keep track of the previous date to detect changes
     previous_date = None
-    
+
     for _, row in df_sorted.iterrows():
         cells = []
         current_date = row["date"]
-        
+
         # Check if this is a new date
         is_new_date = previous_date is not None and current_date != previous_date
-        
+
         # Check if this row contains "(ref)" in the comment
         is_reference = "(ref)" in str(row["comment"])
         

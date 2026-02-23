@@ -4,7 +4,7 @@ AAII_option_vol_ratio = {
     "model_name": "AAII_option_vol_ratio",
     "start_date": "2021-03-01",
     # "end_date":"2024-03-01",
-    "current_estEPS": 0.87,
+    "current_estEPS": 1.54,
     # "current_unemploy": 4.3,
     "comment": "None",
     "threshold": 0.05,

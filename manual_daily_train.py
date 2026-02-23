@@ -18,7 +18,7 @@ import TSLA_param
 
 # ['NVDA', 'PLTR', 'APP', 'ANET', 'CRDO', 'ALAB' ]
 today_date_str = datetime.now().strftime("%Y-%m-%d")
-today_date_str = '2026-02-19'
+today_date_str = '2026-02-20'
 
 response = input("Upload results to Google Cloud? (Y/N): ").strip().upper()
 upload_to_cloud = response == 'Y'
