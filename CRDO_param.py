@@ -34,6 +34,11 @@ AAII_option_vol_ratio = {
         'EPS', 
         'estEPS',
         'surprisePercentage',
+        'dte',
+        'dse',
+        'earn_in_5',
+        'earn_in_10',
+        'earn_in_20',
         'totalRevenue',
         'netIncome',
         
