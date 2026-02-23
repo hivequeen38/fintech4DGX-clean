@@ -1486,6 +1486,77 @@ def fetch_with_retry(currency_from, currency_to, config, max_retries=10, sleep_t
     # but including it for completeness
     raise Exception(f"Failed to fetch {currency_from}/{currency_to} exchange rate after {max_retries} attempts")
 
+def compute_dte_dse_features(df, eff_sessions, symbol):
+    """
+    Add DTE/DSE earnings-proximity features to df (in-place copy).
+
+    Parameters
+    ----------
+    df : DataFrame
+        Must have a 'date' column (string 'YYYY-MM-DD'), sorted ascending.
+        df['date'] is used as the trading calendar.
+    eff_sessions : list of datetime-like
+        Sorted effective earnings dates (next trading day after each report).
+        Include the upcoming report date (from param['next_report_date']) if known.
+    symbol : str
+        Ticker symbol — used only for the warning message.
+
+    Returns
+    -------
+    DataFrame with five new columns appended:
+        dte        – trading days to next earnings (999 = none known)
+        dse        – trading days since last earnings (NaN if no prior)
+        earn_in_5  – 1 if dte in [0, 5]
+        earn_in_10 – 1 if dte in [0, 10]
+        earn_in_20 – 1 if dte in [0, 20]
+    """
+    import numpy as np
+
+    df = df.copy()
+    td = pd.to_datetime(df['date']).reset_index(drop=True)
+    n = len(td)
+
+    td_pos = {d: i for i, d in enumerate(td)}
+    eff = pd.DatetimeIndex(pd.to_datetime(list(eff_sessions))).sort_values()
+
+    dte_arr = np.full(n, 999, dtype=float)
+    dse_arr = np.full(n, np.nan, dtype=float)
+
+    for i in range(n):
+        d = td.iloc[i]
+
+        # DTE: first effective session >= today
+        nj = eff.searchsorted(d, side='left')
+        if nj < len(eff):
+            nday = eff[nj]
+            if nday in td_pos:
+                dte_arr[i] = td_pos[nday] - i
+            else:
+                # Earnings beyond price history — approximate via calendar days
+                dte_arr[i] = max(0, round((nday - d).days * 252 / 365))
+
+        # DSE: most recent effective session <= today
+        lj = eff.searchsorted(d, side='right') - 1
+        if lj >= 0:
+            lday = eff[lj]
+            if lday in td_pos:
+                dse_arr[i] = i - td_pos[lday]
+            else:
+                dse_arr[i] = max(0, round((d - lday).days * 252 / 365))
+
+    sentinel_count = int((dte_arr == 999).sum())
+    if sentinel_count > 0:
+        print(f"  ⚠️  [{symbol}] {sentinel_count} row(s) have no known upcoming earnings "
+              f"(dte=999). Add 'next_report_date' to {symbol}_param.py to fix.")
+
+    df['dte']        = dte_arr
+    df['dse']        = dse_arr
+    df['earn_in_5']  = ((df['dte'] >= 0) & (df['dte'] <= 5)).astype(int)
+    df['earn_in_10'] = ((df['dte'] >= 0) & (df['dte'] <= 10)).astype(int)
+    df['earn_in_20'] = ((df['dte'] >= 0) & (df['dte'] <= 20)).astype(int)
+    return df
+
+
 ################################################
 # return all the merged data into a single DF
 #
@@ -2338,70 +2409,6 @@ def fetch_all_data(config, param):
         # conver that date back to object which is required for a merge
         combined_finance_df['date'] = combined_finance_df['date'].dt.strftime('%Y-%m-%d')
 
-        # now add the new code that handles days till earning report
-        def add_days_to_report(df, master_df, next_report_date=None):
-            """
-            Calculate days until next earnings report for each date in the master dataframe.
-            
-            Args:
-                df: Finance DataFrame with report dates
-                master_df: Main DataFrame with all trading dates
-                next_report_date: The next expected earnings report date (string in 'YYYY-MM-DD' format)
-            
-            Returns:
-                Updated master_df with 'days_to_report' column
-            """
-            # Ensure we're working with datetime objects
-            master_df = master_df.copy()  # Create a copy to avoid modifying the original
-            master_df['date'] = pd.to_datetime(master_df['date'])
-            
-            # Extract all past report dates where we have EPS data
-            # We use shifted_reportedDate which is the actual trading day after the report
-            report_dates = pd.to_datetime(df[df['EPS'].notna()]['date']).tolist()
-            
-            # Add the next upcoming report date if provided
-            if next_report_date:
-                # Convert to datetime
-                next_report_date = pd.to_datetime(next_report_date)
-                
-                # Find the next trading day after the report date (similar to shifted_reportedDate logic)
-                next_trading_date = master_df[master_df['date'] > next_report_date]['date'].min()
-                
-                if not pd.isna(next_trading_date):
-                    report_dates.append(next_trading_date)
-            
-            # Sort all report dates
-            report_dates = sorted(report_dates)
-            
-            # Create a new column in master_df for days_to_report
-            master_df['days_to_report'] = None
-            
-            # For each date in master_df, calculate days to the next report
-            for idx, row in master_df.iterrows():
-                current_date = row['date']
-                
-                # Find the next report date that is >= current date
-                future_reports = [d for d in report_dates if d >= current_date]
-                
-                if future_reports:
-                    next_report = min(future_reports)
-                    
-                    # If it's the report date itself, days_to_report = 0
-                    if current_date == next_report:
-                        master_df.at[idx, 'days_to_report'] = 0
-                    else:
-                        days_to_report = (next_report - current_date).days
-                        master_df.at[idx, 'days_to_report'] = days_to_report
-            
-            # Convert days_to_report to integer (when possible)
-            master_df['days_to_report'] = pd.to_numeric(master_df['days_to_report'], errors='ignore')
-            
-            # Convert date back to string format if needed to match your existing code
-            if isinstance(df['date'].iloc[0], str):
-                master_df['date'] = master_df['date'].dt.strftime('%Y-%m-%d')
-            
-            return master_df
-
         # Only keep the following columns
         combined_finance_df = combined_finance_df.filter(items=['date', 'EPS', 'estEPS', 'surprisePercentage', 'netIncome', 'totalRevenue'])
 
@@ -2422,51 +2429,45 @@ def fetch_all_data(config, param):
         # Merge with existing dataframe
         df = merge_feed_data_frame(df, combined_finance_df)
 
-        # Then add the days_to_report column
-        if 'next_report_date' in param:
-            # Convert date columns to datetime for calculation
-            df['date'] = pd.to_datetime(df['date'])
+        # ── DTE / DSE: trading-day distance to next/last earnings ─────────────
+        # Effective sessions: the shifted_reportedDate values already computed
+        # above (next trading day after each report, since AV gives date-only so
+        # we conservatively assume AMC).  These are the 'date' values in
+        # combined_finance_df rows that have EPS data.
+        eff_sessions = (
+            pd.to_datetime(combined_finance_df.loc[combined_finance_df['EPS'].notna(), 'date'])
+            .sort_values()
+            .tolist()
+        )
 
-            # Get report dates from the dataframe where EPS exists
-            report_dates = df[df['EPS'].notna()]['date'].tolist()
+        # Determine the next report date: use param if provided, else estimate
+        # as last known report date + 3 months (one quarter).
+        next_report_date_param = param.get('next_report_date')
+        if next_report_date_param:
+            nrd = pd.to_datetime(next_report_date_param)
+            print(f">Next earnings for {symbol}: {nrd.date()} (from param)")
+        elif eff_sessions:
+            last_known = pd.to_datetime(eff_sessions[-1])
+            nrd = last_known + pd.DateOffset(months=3)
+            print(f">Next earnings for {symbol}: {nrd.date()} (estimated — last known + 3 months). "
+                  f"Set 'next_report_date' in {symbol}_param.py once NYSE confirms.")
+        else:
+            nrd = None
 
-            # Add the next report date if provided in params
-            next_report_date = param.get('next_report_date')
-            if next_report_date:
-                next_report_date = pd.to_datetime(next_report_date)
-                next_trading_date = df[df['date'] > next_report_date]['date'].min()
-                if not pd.isna(next_trading_date):
-                    report_dates.append(next_trading_date)
+        if nrd is not None:
+            df_dates = pd.to_datetime(df['date'])
+            # Next trading day after the report date (AMC assumption)
+            candidates = df_dates[df_dates > nrd]
+            if not candidates.empty:
+                eff_sessions.append(candidates.min())
+            else:
+                # Report is beyond our price history; add raw date for approximation
+                eff_sessions.append(nrd)
+            eff_sessions = sorted(set(eff_sessions))
 
-            # Sort report dates
-            report_dates = sorted(report_dates)
-
-            # Initialize days_to_report column
-            df['days_to_report'] = None
-
-            # Calculate days_to_report for each date
-            for idx, row in df.iterrows():
-                current_date = row['date']
-                
-                # Find the next report date (>= current date)
-                future_reports = [d for d in report_dates if d >= current_date]
-                
-                if future_reports:
-                    next_report = min(future_reports)
-                    df.at[idx, 'days_to_report'] = int((next_report - current_date).days)
-
-            # Convert back to original date format if needed
-            if not pd.api.types.is_datetime64_dtype(df['date'].dtype):
-                df['date'] = df['date'].dt.strftime('%Y-%m-%d')
-
-                # Convert days_to_report to integer where possible
-                df['days_to_report'] = df['days_to_report'].dt.strftime('%Y-%m-%d')
-
-                # Print to confirm the column exists
-            print("days_to_report added successfully:", 'days_to_report' in df.columns)
-            print("Sample values:", df['days_to_report'].head())
-
-            df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+        df = compute_dte_dse_features(df, eff_sessions, symbol)
+        print(f">DTE/DSE added for {symbol}. Latest dte={df['dte'].iloc[-1]:.0f}, dse={df['dse'].iloc[-1]:.0f}")
+        # ── end DTE/DSE ────────────────────────────────────────────────────────
     
     #########################################################################
     # now get Monetary Base; Reserve Balances

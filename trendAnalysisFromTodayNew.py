@@ -769,8 +769,9 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     # activation function, which generalizes the binary sigmoid function to multiple classes.
     feature_count=train_features.shape[1]
     head_count = param['headcount']
-    if feature_count % head_count != 0:
-        print('ERROR: num of features must be divisible by num of heads')
+    embedded_dim = param['embedded_dim']
+    if embedded_dim % head_count != 0:
+        print(f'ERROR: embedded_dim ({embedded_dim}) must be divisible by headcount ({head_count})')
         sys.exit()
 
     num_classes=3

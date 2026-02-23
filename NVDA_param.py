@@ -35,6 +35,11 @@ AAII_option_vol_ratio = {
         'EPS', 
         'estEPS',
         'surprisePercentage',
+        'dte',
+        'dse',
+        'earn_in_5',
+        'earn_in_10',
+        'earn_in_20',
         'totalRevenue',
         'netIncome',
         
@@ -220,6 +225,11 @@ AAII_reference = {
         'EPS', 
         'estEPS',
         'surprisePercentage',
+        'dte',
+        'dse',
+        'earn_in_5',
+        'earn_in_10',
+        'earn_in_20',
         'totalRevenue',
         'netIncome',
         
@@ -374,7 +384,7 @@ reference = {
     "model_name": "ref",
     "start_date": "2021-03-01",
     # "end_date":"2024-03-01",
-    "current_estEPS": 0.87,
+    "current_estEPS": 1.54,
     # "current_unemploy": 4.3,
     "comment": "None",
     "threshold": 0.05,
@@ -402,7 +412,7 @@ reference = {
         ##################################
         # company fundamentals
         ##################################
-        'EPS', 
+        'EPS',
         'estEPS',
         'surprisePercentage',
         'totalRevenue',
@@ -579,6 +589,11 @@ mz_reference = {
         'EPS', 
         'estEPS',
         'surprisePercentage',
+        'dte',
+        'dse',
+        'earn_in_5',
+        'earn_in_10',
+        'earn_in_20',
         'totalRevenue',
         'netIncome',
         
@@ -754,6 +769,11 @@ AAII_all = {
         'EPS', 
         'estEPS',
         'surprisePercentage',
+        'dte',
+        'dse',
+        'earn_in_5',
+        'earn_in_10',
+        'earn_in_20',
         'totalRevenue',
         # 'netIncome',        ## 2nd pass SHAP whacking
         
