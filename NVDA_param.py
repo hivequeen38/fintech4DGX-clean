@@ -5,6 +5,7 @@ AAII_option_vol_ratio = {
     "start_date": "2021-03-01",
     # "end_date":"2024-03-01",
     "current_estEPS": 1.54,
+    # "next_report_date": "2026-02-25",  # manual override — auto-fetched from AV each run
     # "current_unemploy": 4.3,
     "comment": "None",
     "threshold": 0.05,

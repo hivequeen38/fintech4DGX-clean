@@ -1557,6 +1557,62 @@ def compute_dte_dse_features(df, eff_sessions, symbol):
     return df
 
 
+def fetch_next_report_date(symbol, api_key):
+    """
+    Try to fetch the next upcoming earnings date for `symbol` from live sources.
+
+    Priority:
+      1. Alpha Vantage EARNINGS_CALENDAR (CSV endpoint, free tier)
+      2. yfinance ticker.calendar
+    Returns a pd.Timestamp, or None if both fail.
+    """
+    # 1. Alpha Vantage EARNINGS_CALENDAR
+    try:
+        url = (
+            f"https://www.alphavantage.co/query?function=EARNINGS_CALENDAR"
+            f"&symbol={symbol}&horizon=3month&apikey={api_key}"
+        )
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200 and resp.content:
+            from io import StringIO
+            df_ec = pd.read_csv(StringIO(resp.text))
+            if 'symbol' in df_ec.columns and 'reportDate' in df_ec.columns:
+                df_ec = df_ec[df_ec['symbol'] == symbol].copy()
+                if not df_ec.empty:
+                    df_ec['reportDate'] = pd.to_datetime(df_ec['reportDate'])
+                    upcoming = df_ec[
+                        df_ec['reportDate'] >= pd.Timestamp.today().normalize()
+                    ].sort_values('reportDate')
+                    if not upcoming.empty:
+                        nrd = upcoming.iloc[0]['reportDate']
+                        print(f">  [AV] Next earnings for {symbol}: {nrd.date()}")
+                        return nrd
+    except Exception as e:
+        print(f">  [AV] EARNINGS_CALENDAR fetch failed for {symbol}: {e}")
+
+    # 2. yfinance
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        cal = ticker.calendar
+        if cal is not None:
+            # yfinance >= 0.2 returns a dict; older returns a DataFrame
+            if isinstance(cal, dict) and 'Earnings Date' in cal:
+                dates = cal['Earnings Date']
+                if dates:
+                    nrd = pd.to_datetime(dates[0])
+                    print(f">  [yfinance] Next earnings for {symbol}: {nrd.date()}")
+                    return nrd
+            elif hasattr(cal, 'loc') and 'Earnings Date' in cal.index:
+                nrd = pd.to_datetime(cal.loc['Earnings Date'].iloc[0])
+                print(f">  [yfinance] Next earnings for {symbol}: {nrd.date()}")
+                return nrd
+    except Exception as e:
+        print(f">  [yfinance] earnings fetch failed for {symbol}: {e}")
+
+    return None
+
+
 ################################################
 # return all the merged data into a single DF
 #
@@ -2440,19 +2496,22 @@ def fetch_all_data(config, param):
             .tolist()
         )
 
-        # Determine the next report date: use param if provided, else estimate
-        # as last known report date + 3 months (one quarter).
+        # Determine the next report date.
+        # Priority: param override → live fetch (AV then yfinance) → +3 months estimate
         next_report_date_param = param.get('next_report_date')
         if next_report_date_param:
             nrd = pd.to_datetime(next_report_date_param)
-            print(f">Next earnings for {symbol}: {nrd.date()} (from param)")
-        elif eff_sessions:
-            last_known = pd.to_datetime(eff_sessions[-1])
-            nrd = last_known + pd.DateOffset(months=3)
-            print(f">Next earnings for {symbol}: {nrd.date()} (estimated — last known + 3 months). "
-                  f"Set 'next_report_date' in {symbol}_param.py once NYSE confirms.")
+            print(f">Next earnings for {symbol}: {nrd.date()} (from param — manual override)")
         else:
-            nrd = None
+            nrd = fetch_next_report_date(symbol, config["alpha_vantage"]["key"])
+            if nrd is None:
+                if eff_sessions:
+                    last_known = pd.to_datetime(eff_sessions[-1])
+                    nrd = last_known + pd.DateOffset(months=3)
+                    print(f">Next earnings for {symbol}: {nrd.date()} "
+                          f"(estimated — last known + 3 months; live fetch unavailable).")
+                else:
+                    print(f">Warning: No next earnings date found for {symbol}. DTE will be 999.")
 
         if nrd is not None:
             df_dates = pd.to_datetime(df['date'])
