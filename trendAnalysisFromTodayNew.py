@@ -702,10 +702,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
 
     # Split the Data: Divide your data into training, validation, and test sets.
     if use_time_split:
-        train_sets, val_sets, test_sets = time_based_split(df, n_splits=5, val_size=param['validation_size'])
-        train_df = pd.concat(train_sets + val_sets + test_sets[:-1])
-        val_df = val_sets[-1]
-        test_df = test_sets[-1]
+        train_sets, val_sets, test_sets = time_based_split(df, n_splits=3, val_size=param['validation_size'])
         train_df = pd.concat(train_sets + val_sets + test_sets[:-1])
         val_df = val_sets[-1]
         test_df = test_sets[-1]

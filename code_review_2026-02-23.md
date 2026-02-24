@@ -48,10 +48,9 @@ The function had 4 different return paths returning 2, 3, 3, and 4 values respec
 
 ---
 
-### 7. Duplicate split code (dead code, copy-paste risk)
+### 7. ~~Duplicate split code (dead code, copy-paste risk)~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 700-707
-Lines 705-707 are an exact repeat of 702-704. If someone edits one copy and not the other, the second copy silently overwrites the change.
-**Fix:** Remove lines 705-707.
+Lines 705-707 were an exact repeat of 702-704. Removed the duplicate. Also fixed the explicit `n_splits=5` override that was counteracting the function default we set to 3.
 
 ---
 
@@ -216,7 +215,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 4 | ~~CRITICAL~~ FIXED | trendAnalysis:731-805 | GPU | Class weights on wrong device when criterion created |
 | 5 | ~~CRITICAL~~ FIXED | trendAnalysis:729 | ML | Hard-coded 3-class assumption crashes on 2-class fold |
 | 6 | ~~CRITICAL~~ FIXED | mainDelta:20-77 | Logic | fetchDateAndClosing returns 2/3/4-tuples; caller expects 4 — standardized to always return 4 values |
-| 7 | **CRITICAL** | trendAnalysis:705-707 | Code | Duplicate split assignment overwrites valid code silently |
+| 7 | ~~CRITICAL~~ FIXED | trendAnalysis:705-707 | Code | Duplicate split assignment overwrites valid code silently |
 | 8 | HIGH | mainDelta:267-270 | Code | Debug prints left in production |
 | 9 | HIGH | fetchBulkData:790 | Data | Zero-fill for missing sentiment corrupts features |
 | 10 | HIGH | *_param.py | Config | Feature sets have diverged across stocks |
