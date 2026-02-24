@@ -1060,45 +1060,52 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     ###################################################
     # Now save the results into a ever running log
     #
-    result_dictionary = {
-        'Validation Loss': val_loss,
-        'Validation Accuracy': val_acc,
-        'Avergae Precision': str(average_precision),
-        'Avergae Recall': str(average_recall),
-        'Avergae F1': str(average_f1),
-        'F1 for Class 0 [no change]': str(f1[0]),
-        'F1 for Class 1 [Up]':str(f1[1]),
-        'F1 for Class 2 [Down]':str(f1[2]),
-        'Test F1 for class 0: ': test_f1[0],
-        'Test F1 for class 1: ': test_f1[1],
-        'Test F1 for class 2: ': test_f1[2],
-    }
-
-    result_dictionary.update(roc_auc_scores)    # add the AUC results into results
-
-    # Creating a row
-    # tiume stamp, stock symbol, the input param, and then output
-    row = [date, param, result_dictionary]
-
-    # File path
-    json_file_path = symbol+ '_trend.json'
-
-    # Read existing data from the file or start with an empty list
-    if os.path.exists(json_file_path):
-        with open(json_file_path, 'r') as file:
-            data = json.load(file)
+    nan_in_val  = any(np.isnan(v) for v in f1)
+    nan_in_test = any(np.isnan(v) for v in test_f1)
+    if nan_in_val or nan_in_test:
+        print(f"WARNING: NaN metrics detected — one or more classes absent from val/test set.")
+        print(f"  val  F1={f1}  test F1={test_f1}")
+        print(f"  Result NOT saved to {symbol}_trend.json to avoid corrupt history.")
     else:
-        data = []
+        result_dictionary = {
+            'Validation Loss': val_loss,
+            'Validation Accuracy': val_acc,
+            'Avergae Precision': str(average_precision),
+            'Avergae Recall': str(average_recall),
+            'Avergae F1': str(average_f1),
+            'F1 for Class 0 [no change]': str(f1[0]),
+            'F1 for Class 1 [Up]':str(f1[1]),
+            'F1 for Class 2 [Down]':str(f1[2]),
+            'Test F1 for class 0: ': float(test_f1[0]),
+            'Test F1 for class 1: ': float(test_f1[1]),
+            'Test F1 for class 2: ': float(test_f1[2]),
+        }
 
-    # Append the new row to the data
-    data.append(row)
+        result_dictionary.update(roc_auc_scores)    # add the AUC results into results
 
-    # Limit the data to the last 2000 entries
-    data = data[-2000:]
+        # Creating a row
+        # tiume stamp, stock symbol, the input param, and then output
+        row = [date, param, result_dictionary]
 
-    # Write the updated data back to the file
-    with open(json_file_path, 'w') as file:
-        json.dump(data, file, indent=4)
+        # File path
+        json_file_path = symbol+ '_trend.json'
+
+        # Read existing data from the file or start with an empty list
+        if os.path.exists(json_file_path):
+            with open(json_file_path, 'r') as file:
+                data = json.load(file)
+        else:
+            data = []
+
+        # Append the new row to the data
+        data.append(row)
+
+        # Limit the data to the last 2000 entries
+        data = data[-2000:]
+
+        # Write the updated data back to the file
+        with open(json_file_path, 'w') as file:
+            json.dump(data, file, indent=4)
 
     
     # Load your JSON data

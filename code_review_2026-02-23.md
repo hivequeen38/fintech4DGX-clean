@@ -113,10 +113,10 @@ Inference manually applies softmax to logits before argmax. Training validation 
 
 ---
 
-### 15. No bounds/NaN check on precision/recall/F1 metrics
+### 15. ~~No bounds/NaN check on precision/recall/F1 metrics~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 889-907
 If a class is absent from the test set, sklearn's `classification_report` emits NaN/zero-division warnings but execution continues. NaN metrics get written to the results file silently.
-**Fix:** Check for NaN metrics after computation; warn loudly and skip saving if metrics are invalid.
+**Fix:** Added NaN check on both `f1` (val) and `test_f1` arrays before the JSON write. If any NaN detected, logs a warning with the actual values and skips the save entirely. Also fixed type inconsistency: test F1 values now written as `float()` instead of raw numpy floats.
 
 ---
 
@@ -227,7 +227,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 12 | ~~HIGH~~ FIXED | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
 | 13 | ~~HIGH~~ FIXED | trendAnalysis:380 | Error | No existence check before loading scaler file |
 | 14 | ~~HIGH~~ FIXED | trendAnalysis:397,985 | ML | Softmax applied inconsistently in inference vs. train |
-| 15 | HIGH | trendAnalysis:889 | ML | NaN metrics written to results file silently |
+| 15 | ~~HIGH~~ FIXED | trendAnalysis:889 | ML | NaN metrics written to results file silently |
 | 16 | MEDIUM | trendAnalysis:411 | Logic | Prediction timestamp from wall clock, not data max date |
 | 17 | MEDIUM | trendAnalysis:758 | ML | Batch size may exceed split size in edge cases |
 | 18 | MEDIUM | trendAnalysis:656 | ML | CUDA determinism not enforced |
