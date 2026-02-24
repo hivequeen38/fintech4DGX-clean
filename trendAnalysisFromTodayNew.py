@@ -376,6 +376,10 @@ def make_prediciton( model, raw_df: DataFrame, param: dict[str], currentDateTime
 
     selected_columns = param['selected_columns']
 
+    missing = [c for c in selected_columns if c not in raw_df.columns]
+    if missing:
+        raise ValueError(f"[{param['symbol']}] selected_columns has features not in dataframe: {missing}")
+
     raw_df = raw_df[selected_columns]   # only keep those slected features defined in the param, this includes label
 
     # for inference only use the last stretch of the most recent data, from today going back target size plus batch size
@@ -536,7 +540,11 @@ def make_prediciton_test( model, raw_df: DataFrame, param: dict[str], currentDat
     # i only want to keep the last 20 row of the df
     # RAW DF HAS ALL TEH DATA not date limited
     selected_columns = param['selected_columns']
-    
+
+    missing = [c for c in selected_columns if c not in raw_df.columns]
+    if missing:
+        raise ValueError(f"[{param['symbol']}] selected_columns has features not in dataframe: {missing}")
+
     # Step 1: Select columns first (including 'label')
     new_df = raw_df[selected_columns].copy()
     

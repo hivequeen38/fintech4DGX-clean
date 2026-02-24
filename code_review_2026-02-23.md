@@ -92,10 +92,10 @@ The last `target_size` rows have NaN labels (they look beyond the dataset end) a
 
 ---
 
-### 12. No validation that selected_columns exist in dataframe at inference
+### 12. ~~No validation that selected_columns exist in dataframe at inference~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 369-371, 543-544
 If a feature in `selected_columns` is missing from the fetched data (e.g., API returned incomplete data), the column selection silently produces NaNs or crashes with an obscure KeyError.
-**Fix:** Assert all `selected_columns` exist before subsetting. Print a clear error naming the missing column(s).
+**Fix:** Added explicit `missing = [c for c in selected_columns if c not in raw_df.columns]` check with a clear `ValueError` naming the missing columns, in both `make_prediciton` and `make_prediciton_test`.
 
 ---
 
@@ -224,7 +224,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 9 | ~~HIGH~~ FIXED | fetchBulkData:2677,2749 | Data | Zero-fill for missing sentiment corrupts features |
 | 10 | ~~HIGH~~ PARTIAL | *_param.py | Config | Feature sets have diverged across stocks — accidental divergences fixed; intentional diffs remain |
 | 11 | ~~HIGH~~ FIXED | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
-| 12 | HIGH | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
+| 12 | ~~HIGH~~ FIXED | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
 | 13 | HIGH | trendAnalysis:380 | Error | No existence check before loading scaler file |
 | 14 | HIGH | trendAnalysis:397,985 | ML | Softmax applied inconsistently in inference vs. train |
 | 15 | HIGH | trendAnalysis:889 | ML | NaN metrics written to results file silently |
