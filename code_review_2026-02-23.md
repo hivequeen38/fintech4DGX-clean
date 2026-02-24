@@ -27,11 +27,10 @@ The date is intentionally set manually each day. This supports regression testin
 
 ---
 
-### 4. Class weights created on CPU, criterion then moved to device incorrectly
+### 4. ~~Class weights created on CPU, criterion then moved to device incorrectly~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 731, 788, 803-805
 `class_weights_tensor` is created on CPU, passed into `CrossEntropyLoss` (still CPU), then moved to device — but the criterion already holds a reference to the CPU tensor.
-**Fix:** Move `class_weights_tensor` to device *before* creating `CrossEntropyLoss`.
-*(Also partially fixed in Feb 2026 session — verify the ordering is correct.)*
+**Fix:** Moved `device = torch.device(...)` and `class_weights_tensor.to(device)` before criterion creation. Criterion is now created once with the correct device tensor. Removed the duplicate dead-code criterion creation that the Feb 2026 partial fix left behind.
 
 ---
 
@@ -217,7 +216,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 1 | ~~CRITICAL~~ BY DESIGN | manual_daily_train.py:21 | Config | Manual date override — intentional for regression testing |
 | 2 | ~~CRITICAL~~ ADDRESSED | trendAnalysis:709 | ML | shuffle=True destroys temporal ordering — reference_no_shuffle config added with shuffle=False; reference keeps shuffle=True for continuity |
 | 3 | ~~CRITICAL~~ FIXED | trendAnalysis:921 | GPU | Labels not moved to device in test loop |
-| 4 | **CRITICAL** | trendAnalysis:731-805 | GPU | Class weights on wrong device when criterion created |
+| 4 | ~~CRITICAL~~ FIXED | trendAnalysis:731-805 | GPU | Class weights on wrong device when criterion created |
 | 5 | **CRITICAL** | trendAnalysis:729 | ML | Hard-coded 3-class assumption crashes on 2-class fold |
 | 6 | ~~CRITICAL~~ FIXED | mainDelta:20-77 | Logic | fetchDateAndClosing returns 2/3/4-tuples; caller expects 4 — standardized to always return 4 values |
 | 7 | **CRITICAL** | trendAnalysis:705-707 | Code | Duplicate split assignment overwrites valid code silently |

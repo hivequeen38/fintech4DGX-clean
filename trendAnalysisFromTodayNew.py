@@ -783,28 +783,24 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     # Instantiate the model
     model = TransformerModel(input_dim= feature_count, num_classes=num_classes, num_heads= head_count, num_layers=param['num_layers'], dropout_rate=param['dropout_rate'], embedded_dim=param['embedded_dim'])
     
+    # Check if CUDA (GPU support) is available and use it, otherwise use CPU
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Move class weights to device before creating criterion to avoid device mismatch
+    class_weights_tensor = class_weights_tensor.to(device)
+
     # Define loss function
     if num_classes == 1:
         criterion = nn.BCELoss()
     else:
         criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
-    
-    # optimizer = torch.optim.Adam(model.parameters(), lr=param['learning_rate'])
+
     # Define optimizer with L2 regularization (weight decay)
     optimizer = optim.Adam(
-        model.parameters(), 
-        lr=param['learning_rate'], 
+        model.parameters(),
+        lr=param['learning_rate'],
         weight_decay=param["l2_weight_decay"]  # L2 regularization
     )
-
-
-    # Check if CUDA (GPU support) is available and use it, otherwise use CPU
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # Move class weights to same device as model before creating criterion
-    class_weights_tensor = class_weights_tensor.to(device)
-    if num_classes > 1:
-        criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
 
     # Move your model to the device
     model.to(device)
