@@ -614,14 +614,18 @@ def calculate_class_weight(total_samples_df: DataFrame, num_classes: int):
     class_weights = []
     for i in range(num_classes):
         sample_count = len(total_samples_df[total_samples_df['label'] == i])
-        sample_weight = total_sample_count / (num_classes* sample_count)
+        if sample_count == 0:
+            print(f"Class {i}: 0 samples — absent from fold, weight set to 0.0")
+            print("-" * 40)
+            class_weights.append(0.0)
+            continue
+        sample_weight = total_sample_count / (num_classes * sample_count)
         class_weights.append(sample_weight)
         # Print distribution and weight for each class
         print(f"Class {i}: {sample_count} samples (weight: {sample_weight:.3f})")
         print("-" * 40)
- 
-    # now we have the counts for all three calculate the weight using the formula
-    # WI = total_sample_count / (3* sample_count )
+
+    # WI = total_sample_count / (num_classes * sample_count)
     return class_weights
 
 def time_based_split(df, n_splits=3, val_size=0.15):
@@ -729,7 +733,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     if isinstance(num_labels, pd.Series):
         num_labels = num_labels.iloc[0]  # or num_labels.values[0]
     class_weights = calculate_class_weight(train_df, num_labels)
-    class_weights_dict = {0: class_weights[0], 1: class_weights[1], 2: class_weights[2]}  # use the down weighting param passed in
+    class_weights_dict = {i: w for i, w in enumerate(class_weights)}  # dynamic: safe if a class is absent from the fold
     class_weights_tensor = torch.tensor(list(class_weights_dict.values()), dtype=torch.float)
 
     # Feature Scaling: Normalize or standardize your features. Transformers typically require input data to be scaled.

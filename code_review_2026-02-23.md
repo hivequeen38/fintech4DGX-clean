@@ -34,13 +34,10 @@ The date is intentionally set manually each day. This supports regression testin
 
 ---
 
-### 5. Class weight indexing assumes exactly 3 classes exist
+### 5. ~~Class weight indexing assumes exactly 3 classes exist~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 729-730
-```python
-class_weights_dict = {0: class_weights[0], 1: class_weights[1], 2: class_weights[2]}
-```
-If only 2 classes appear in a training fold (e.g., no NEUTRAL days in a small date range), this crashes with `IndexError`.
-**Fix:** Build dict dynamically: `{i: w for i, w in enumerate(class_weights)}`
+Hard-coded `{0: class_weights[0], 1: ..., 2: ...}` crashed with `IndexError` if a class was absent from the training fold. Also `calculate_class_weight` would divide by zero if sample_count==0.
+**Fix:** Dict built dynamically with `{i: w for i, w in enumerate(class_weights)}`. Added zero-count guard in `calculate_class_weight` that logs the absent class and appends `0.0` instead of dividing by zero.
 
 ---
 
@@ -217,7 +214,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 2 | ~~CRITICAL~~ ADDRESSED | trendAnalysis:709 | ML | shuffle=True destroys temporal ordering — reference_no_shuffle config added with shuffle=False; reference keeps shuffle=True for continuity |
 | 3 | ~~CRITICAL~~ FIXED | trendAnalysis:921 | GPU | Labels not moved to device in test loop |
 | 4 | ~~CRITICAL~~ FIXED | trendAnalysis:731-805 | GPU | Class weights on wrong device when criterion created |
-| 5 | **CRITICAL** | trendAnalysis:729 | ML | Hard-coded 3-class assumption crashes on 2-class fold |
+| 5 | ~~CRITICAL~~ FIXED | trendAnalysis:729 | ML | Hard-coded 3-class assumption crashes on 2-class fold |
 | 6 | ~~CRITICAL~~ FIXED | mainDelta:20-77 | Logic | fetchDateAndClosing returns 2/3/4-tuples; caller expects 4 — standardized to always return 4 values |
 | 7 | **CRITICAL** | trendAnalysis:705-707 | Code | Duplicate split assignment overwrites valid code silently |
 | 8 | HIGH | mainDelta:267-270 | Code | Debug prints left in production |
