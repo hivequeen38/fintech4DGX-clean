@@ -43,9 +43,18 @@ AAII_option_vol_ratio = {
         'earn_in_20',
         'totalRevenue',
         'netIncome',
-        
+
         ##################################
-        # Stock Momentum 
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
+        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
+        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
+        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+
+        ##################################
+        # Stock Momentum
         ##################################
         "MACD_Signal",
         "MACD",
@@ -234,9 +243,18 @@ AAII_reference = {
         'earn_in_20',
         'totalRevenue',
         'netIncome',
-        
+
         ##################################
-        # Stock Momentum 
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
+        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
+        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
+        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+
+        ##################################
+        # Stock Momentum
         ##################################
         "MACD_Signal",
         "MACD",
@@ -425,9 +443,18 @@ reference = {
         'earn_in_20',
         'totalRevenue',
         'netIncome',
-        
+
         ##################################
-        # Stock Momentum 
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
+        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
+        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
+        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+
+        ##################################
+        # Stock Momentum
         ##################################
         "MACD_Signal",
         "MACD",
@@ -609,9 +636,18 @@ mz_reference = {
         'earn_in_20',
         'totalRevenue',
         'netIncome',
-        
+
         ##################################
-        # Stock Momentum 
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
+        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
+        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
+        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+
+        ##################################
+        # Stock Momentum
         ##################################
         "MACD_Signal",
         "MACD",
@@ -790,7 +826,16 @@ AAII_all = {
         'earn_in_20',
         'totalRevenue',
         # 'netIncome',        ## 2nd pass SHAP whacking
-        
+
+        ##################################
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
+        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
+        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
+        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+
         ##################################
         # Stock Momentum 
         ##################################
