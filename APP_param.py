@@ -22,6 +22,7 @@ AAII_option_vol_ratio = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals
@@ -179,6 +180,7 @@ AAII_Min_features = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals
@@ -328,6 +330,7 @@ AAII_reference = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals
@@ -480,6 +483,7 @@ reference = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals

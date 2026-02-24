@@ -74,10 +74,14 @@ When a CP ratio CSV file is missing, all sentiment columns are filled with 0. Ze
 
 ---
 
-### 10. Param files have diverged — inconsistent feature sets per stock
+### 10. Param files have diverged — inconsistent feature sets per stock — PARTIALLY FIXED 2026-02-24
 **File:** `NVDA_param.py` vs `CRDO_param.py` vs others
 NVDA `AAII_option_vol_ratio` includes `dte/dse/earn_in_*`; CRDO `reference` includes `rs_avgo` but not all other stocks do. Models trained on different feature counts can't be compared, ensembled, or validated against each other.
-**Fix:** Define a canonical feature schema; validate all param files against it at startup.
+**Partial fix:** Corrected accidental divergences in PLTR, APP, INOD:
+- Added `volume_volatility` to all PLTR/APP/INOD blocks (was present in NVDA/CRDO but never added to these three)
+- Commented out `FEDTARMDLR` and `CORESTICKM159SFRBATL` in PLTR (active there but marked "probably not useful"/"dead" and commented in all other tickers)
+- Commented out `PCE` in PLTR (active, but marked "No data since 3/1" and commented everywhere else)
+**Remaining:** Intentional per-stock differences (PLTR defense ETFs vs NVDA semiconductor peers) are correct. A startup validator to catch future drift is still recommended.
 
 ---
 
@@ -218,7 +222,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 7 | ~~CRITICAL~~ FIXED | trendAnalysis:705-707 | Code | Duplicate split assignment overwrites valid code silently |
 | 8 | ~~HIGH~~ FIXED | mainDelta:267-270 | Code | Debug prints left in production |
 | 9 | ~~HIGH~~ FIXED | fetchBulkData:2677,2749 | Data | Zero-fill for missing sentiment corrupts features |
-| 10 | HIGH | *_param.py | Config | Feature sets have diverged across stocks |
+| 10 | ~~HIGH~~ PARTIAL | *_param.py | Config | Feature sets have diverged across stocks — accidental divergences fixed; intentional diffs remain |
 | 11 | HIGH | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
 | 12 | HIGH | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
 | 13 | HIGH | trendAnalysis:380 | Error | No existence check before loading scaler file |

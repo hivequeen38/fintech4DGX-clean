@@ -23,6 +23,7 @@ AAII_option_vol_ratio = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals
@@ -89,13 +90,13 @@ AAII_option_vol_ratio = {
         # "VIXCLS_Y",         # VIX from YFinance
         "DCOILWTICO",       # WTI oil price
         # "unemploy",         # as of 5/9, still no satat for 5/1
-        "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
+        # "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
         "USEPUINDXD",       # Economic Policy Uncertainty Index for United States
         'UMCSENT',          # consumer sentiment (removed, slightly worse then base (no update since 3/1/24)
         # 'BSCICP03USM665S',  # sentiment OECD   (at 5/9/24, no data since Jan 24)
         'BSCICP02USM460S',   # Business Tendency Surveys (Manufacturing): Confidence Indicators: Composite Indicators: National Indicator for United States 
         'DGORDER',          # DURABLE GOODS ORDER
-        'CORESTICKM159SFRBATL',     # Sticky Price Consumer Price Index less Food and Energy (no update in 5 mo, I think this is dead)
+        # 'CORESTICKM159SFRBATL',     # Sticky Price Consumer Price Index less Food and Energy (no update in 5 mo, I think this is dead)
         # 'PCE',              # No data since 3/1
         'PCU33443344',      # Producer Price Index by Industry: Semiconductor and Other Electronic Component Manufacturing 
         'SAHMREALTIME',     # sahm unemployment (seems to work better than unemploy)
@@ -183,6 +184,7 @@ AAII_reference_test = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals
@@ -243,14 +245,14 @@ AAII_reference_test = {
         # "VIXCLS_Y",         # VIX from YFinance
         "DCOILWTICO",       # WTI oil price
         # "unemploy",         # as of 5/9, still no satat for 5/1 # whack SPAH pass 1
-        "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
+        # "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
         "USEPUINDXD",       # Economic Policy Uncertainty Index for United States
         # 'UMCSENT',          # consumer sentiment (removed, slightly worse then base (no update since 3/1/24)    # whack SPAH pass 1
         # 'BSCICP03USM665S',  # sentiment OECD   (at 5/9/24, no data since Jan 24)
         'BSCICP02USM460S',   # Business Tendency Surveys (Manufacturing): Confidence Indicators: Composite Indicators: National Indicator for United States 
         'DGORDER',          # DURABLE GOODS ORDER
         # 'CORESTICKM159SFRBATL',     # Sticky Price Consumer Price Index less Food and Energy (no update in 5 mo, I think this is dead)  # whack SPAH pass 1
-        'PCE',              # No data since 3/1
+        # 'PCE',              # No data since 3/1
         'PCU33443344',      # Producer Price Index by Industry: Semiconductor and Other Electronic Component Manufacturing 
         'SAHMREALTIME',     # sahm unemployment (seems to work better than unemploy)
         'JTSJOL',           # non farm job opening
@@ -486,6 +488,7 @@ AAII_reference = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals
@@ -546,14 +549,14 @@ AAII_reference = {
         # "VIXCLS_Y",         # VIX from YFinance
         "DCOILWTICO",       # WTI oil price
         # "unemploy",         # as of 5/9, still no satat for 5/1
-        "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
+        # "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
         "USEPUINDXD",       # Economic Policy Uncertainty Index for United States
         'UMCSENT',          # consumer sentiment (removed, slightly worse then base (no update since 3/1/24)
         # 'BSCICP03USM665S',  # sentiment OECD   (at 5/9/24, no data since Jan 24)
         'BSCICP02USM460S',   # Business Tendency Surveys (Manufacturing): Confidence Indicators: Composite Indicators: National Indicator for United States 
         'DGORDER',          # DURABLE GOODS ORDER
-        'CORESTICKM159SFRBATL',     # Sticky Price Consumer Price Index less Food and Energy (no update in 5 mo, I think this is dead)
-        'PCE',              # No data since 3/1
+        # 'CORESTICKM159SFRBATL',     # Sticky Price Consumer Price Index less Food and Energy (no update in 5 mo, I think this is dead)
+        # 'PCE',              # No data since 3/1
         'PCU33443344',      # Producer Price Index by Industry: Semiconductor and Other Electronic Component Manufacturing 
         'SAHMREALTIME',     # sahm unemployment (seems to work better than unemploy)
         'JTSJOL',           # non farm job opening
@@ -640,6 +643,7 @@ reference = {
         "VWAP",           # Volume Weighted Average Price (10/5/24 VWAP > Volume)
         "high",           # high low is slightly underperforming
         "low",
+        'volume_volatility',
 
         ##################################
         # company fundamentals
@@ -705,14 +709,14 @@ reference = {
         # "VIXCLS_Y",         # VIX from YFinance
         "DCOILWTICO",       # WTI oil price
         # "unemploy",         # as of 5/9, still no satat for 5/1
-        "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
+        # "FEDTARMDLR",       # Longer Run FOMC Summary of Economic Projections for the Fed Funds Rate, Median (probably not useful (in 5/9/24, last data point is 3/20/24)
         "USEPUINDXD",       # Economic Policy Uncertainty Index for United States
         'UMCSENT',          # consumer sentiment (removed, slightly worse then base (no update since 3/1/24)
         # 'BSCICP03USM665S',  # sentiment OECD   (at 5/9/24, no data since Jan 24)
         'BSCICP02USM460S',   # Business Tendency Surveys (Manufacturing): Confidence Indicators: Composite Indicators: National Indicator for United States 
         'DGORDER',          # DURABLE GOODS ORDER
-        'CORESTICKM159SFRBATL',     # Sticky Price Consumer Price Index less Food and Energy (no update in 5 mo, I think this is dead)
-        'PCE',              # No data since 3/1
+        # 'CORESTICKM159SFRBATL',     # Sticky Price Consumer Price Index less Food and Energy (no update in 5 mo, I think this is dead)
+        # 'PCE',              # No data since 3/1
         'PCU33443344',      # Producer Price Index by Industry: Semiconductor and Other Electronic Component Manufacturing 
         'SAHMREALTIME',     # sahm unemployment (seems to work better than unemploy)
         'JTSJOL',           # non farm job opening
