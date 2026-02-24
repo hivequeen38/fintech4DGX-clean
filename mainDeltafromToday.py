@@ -264,11 +264,13 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
     # for first 5 days at 3%, then rest of the 15 days at 5%
     comment = 'Training (Fixed)' + ' RD=' + str(run_date) + ' ' + input_comment
 
+    use_time_split = param.get('use_time_split', False)
+
     param["threshold"] = 0.03
-    process_first_5_days(param, incr_df, False, comment)
+    process_first_5_days(param, incr_df, False, comment, use_time_split)
 
     param["threshold"] = 0.05
-    process_last_10_days(param, incr_df, False, comment)
+    process_last_10_days(param, incr_df, False, comment, use_time_split)
 
 
     # at this point there are 15x individual result files that's been updated. 

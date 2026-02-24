@@ -624,7 +624,7 @@ def calculate_class_weight(total_samples_df: DataFrame, num_classes: int):
     # WI = total_sample_count / (3* sample_count )
     return class_weights
 
-def time_based_split(df, n_splits=5, val_size=0.15):
+def time_based_split(df, n_splits=3, val_size=0.15):
     # Ensure the dataframe is sorted by date
     # df = df.sort_values('date')   # do we need dates here? Already been striped
     
@@ -706,8 +706,10 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         val_df = val_sets[-1]
         test_df = test_sets[-1]
     else:
-        train_df, test_df = train_test_split(df, test_size=param['test_size'], shuffle=True, random_state=random_seed)
-        train_df, val_df = train_test_split(train_df, test_size=param['validation_size'], shuffle=True, random_state=random_seed)
+        shuffle_splits = param.get('shuffle_splits', False)
+        rs = random_seed if shuffle_splits else None
+        train_df, test_df = train_test_split(df, test_size=param['test_size'], shuffle=shuffle_splits, random_state=rs)
+        train_df, val_df = train_test_split(train_df, test_size=param['validation_size'], shuffle=shuffle_splits, random_state=rs)
         
 
     # print("Training Set Statistics:")

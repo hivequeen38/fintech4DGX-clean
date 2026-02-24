@@ -139,6 +139,7 @@ AAII_option_vol_ratio = {
     "validation_size": 0.25,
     "batch_size": 128,      # increased from 32 for better GPU utilization
     "shuffle": False,       # even though turning it on improves things, should not do it for time series data
+    "use_time_split": False,   # True: TimeSeriesSplit(n_splits=3); False: single chronological split
     "headcount": 8,         
     "num_layers": 2,            # 2 MUCH BETTER THAN 3
     "dropout_rate": 0.1,
@@ -286,6 +287,7 @@ AAII_Min_features = {
     "validation_size": 0.25,
     "batch_size": 128,      # increased from 32 for better GPU utilization
     "shuffle": False,       # even though turning it on improves things, should not do it for time series data
+    "use_time_split": False,   # True: TimeSeriesSplit(n_splits=3); False: single chronological split
     "headcount": 8,         
     "num_layers": 2,            # 2 MUCH BETTER THAN 3
     "dropout_rate": 0.1,
@@ -437,6 +439,7 @@ AAII_reference = {
     "validation_size": 0.25,
     "batch_size": 128,      # increased from 32 for better GPU utilization
     "shuffle": False,       # even though turning it on improves things, should not do it for time series data
+    "use_time_split": False,   # True: TimeSeriesSplit(n_splits=3); False: single chronological split
     "headcount": 8,         
     "num_layers": 2,            # 2 MUCH BETTER THAN 3
     "dropout_rate": 0.1,
@@ -484,6 +487,11 @@ reference = {
         'EPS', 
         'estEPS',
         'surprisePercentage',
+        'dte',
+        'dse',
+        'earn_in_5',
+        'earn_in_10',
+        'earn_in_20',
         'totalRevenue',
         'netIncome',
         
@@ -587,7 +595,9 @@ reference = {
     "validation_size": 0.25,
     "batch_size": 128,      # increased from 32 for better GPU utilization
     "shuffle": False,       # even though turning it on improves things, should not do it for time series data
-    "headcount": 8,         
+    "shuffle_splits": True,    # True: train_test_split with shuffle (look-ahead bias, inflated F1); False: chronological honest split
+    "use_time_split": False,   # True: TimeSeriesSplit(n_splits=3); False: single chronological split
+    "headcount": 8,
     "num_layers": 2,            # 2 MUCH BETTER THAN 3
     "dropout_rate": 0.1,
     "learning_rate": 0.0005,
@@ -602,3 +612,6 @@ reference = {
     "l2_weight_decay": 1.6e-5,  # 1.6 seems best
     "embedded_dim": 128        # increased from 64 for model capacity
 }   # reference
+
+# Identical to reference but uses chronological (no-shuffle) train/test split — honest out-of-sample evaluation
+reference_no_shuffle = {**reference, "model_name": "ref_noshuf", "shuffle_splits": False}
