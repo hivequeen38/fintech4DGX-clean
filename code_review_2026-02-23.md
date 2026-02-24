@@ -20,11 +20,10 @@ The date is intentionally set manually each day. This supports regression testin
 
 ---
 
-### 3. Labels not moved to device in test loop
+### 3. ~~Labels not moved to device in test loop~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 921-929
 `inputs` are moved to device but `labels` are not. Works silently on CPU fallback but will crash or silently corrupt results on GPU.
-**Fix:** Add `labels = labels.to(device)` immediately after `inputs = inputs.to(device)`.
-*(Note: this was partially fixed in Feb 2026 session — worth verifying the fix covers the test loop, not just train.)*
+**Fix:** Added `labels = labels.to(device)` immediately after `inputs = inputs.to(device)`, matching the validation loop pattern at lines 874-875.
 
 ---
 
@@ -217,7 +216,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 |---|----------|------|------|-------------|
 | 1 | ~~CRITICAL~~ BY DESIGN | manual_daily_train.py:21 | Config | Manual date override — intentional for regression testing |
 | 2 | ~~CRITICAL~~ ADDRESSED | trendAnalysis:709 | ML | shuffle=True destroys temporal ordering — reference_no_shuffle config added with shuffle=False; reference keeps shuffle=True for continuity |
-| 3 | **CRITICAL** | trendAnalysis:921 | GPU | Labels not moved to device in test loop |
+| 3 | ~~CRITICAL~~ FIXED | trendAnalysis:921 | GPU | Labels not moved to device in test loop |
 | 4 | **CRITICAL** | trendAnalysis:731-805 | GPU | Class weights on wrong device when criterion created |
 | 5 | **CRITICAL** | trendAnalysis:729 | ML | Hard-coded 3-class assumption crashes on 2-class fold |
 | 6 | ~~CRITICAL~~ FIXED | mainDelta:20-77 | Logic | fetchDateAndClosing returns 2/3/4-tuples; caller expects 4 — standardized to always return 4 values |

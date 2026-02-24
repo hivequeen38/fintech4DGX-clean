@@ -924,6 +924,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         # Forward pass and get predictions
         # Make sure to move your inputs and labels to the same device as your model
         inputs = inputs.to(device)
+        labels = labels.to(device)
         outputs = model(inputs)
         preds = torch.argmax(outputs, dim=-1)
 
