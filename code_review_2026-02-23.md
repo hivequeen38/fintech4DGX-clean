@@ -99,10 +99,10 @@ If a feature in `selected_columns` is missing from the fetched data (e.g., API r
 
 ---
 
-### 13. Scaler file loaded without existence check
+### 13. ~~Scaler file loaded without existence check~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 380-381, 474-475, 547-549
 If the `.joblib` scaler file is missing, the crash message is a cryptic joblib error rather than "scaler not found for NVDA/AAII_option_vol_ratio".
-**Fix:** Add `os.path.exists()` check with a clear error message naming the missing file.
+**Fix:** Added `os.path.exists()` guard before both `load()` calls with a `FileNotFoundError` naming the symbol, model_name, and filename. Also removed a leftover `print("Scaler filename:", ...)` debug print from `make_prediciton_test`.
 
 ---
 
@@ -225,7 +225,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 10 | ~~HIGH~~ PARTIAL | *_param.py | Config | Feature sets have diverged across stocks — accidental divergences fixed; intentional diffs remain |
 | 11 | ~~HIGH~~ FIXED | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
 | 12 | ~~HIGH~~ FIXED | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
-| 13 | HIGH | trendAnalysis:380 | Error | No existence check before loading scaler file |
+| 13 | ~~HIGH~~ FIXED | trendAnalysis:380 | Error | No existence check before loading scaler file |
 | 14 | HIGH | trendAnalysis:397,985 | ML | Softmax applied inconsistently in inference vs. train |
 | 15 | HIGH | trendAnalysis:889 | ML | NaN metrics written to results file silently |
 | 16 | MEDIUM | trendAnalysis:411 | Logic | Prediction timestamp from wall clock, not data max date |

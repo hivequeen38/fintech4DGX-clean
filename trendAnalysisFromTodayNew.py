@@ -390,6 +390,10 @@ def make_prediciton( model, raw_df: DataFrame, param: dict[str], currentDateTime
 
     # Load the scaler from disk
     scaler_filename = param['symbol'] + '_' + param['model_name'] + '_scaler.joblib'
+    if not os.path.exists(scaler_filename):
+        raise FileNotFoundError(
+            f"Scaler not found for [{param['symbol']} / {param['model_name']}]: {scaler_filename}. "
+            f"Run training first to generate this file.")
     scaler = load(scaler_filename)
 
     # Assuming new_data_df is your new incoming data for inference
@@ -484,6 +488,10 @@ def make_prediciton_test_suspect( model, raw_df: DataFrame, param: dict[str], cu
 
     # Load the scaler from disk
     scaler_filename = param['symbol'] + '_' + param['model_name'] + '_scaler.joblib'
+    if not os.path.exists(scaler_filename):
+        raise FileNotFoundError(
+            f"Scaler not found for [{param['symbol']} / {param['model_name']}]: {scaler_filename}. "
+            f"Run training first to generate this file.")
     scaler = load(scaler_filename)
 
     # Convert DataFrame to NumPy array
@@ -561,7 +569,10 @@ def make_prediciton_test( model, raw_df: DataFrame, param: dict[str], currentDat
     
     # Step 6: Load and apply scaler
     scaler_filename = param['symbol'] + '_' + param['model_name'] + '_scaler.joblib'
-    print("Scaler filename:", scaler_filename)
+    if not os.path.exists(scaler_filename):
+        raise FileNotFoundError(
+            f"Scaler not found for [{param['symbol']} / {param['model_name']}]: {scaler_filename}. "
+            f"Run training first to generate this file.")
     scaler = load(scaler_filename)
     features_array = scaler.transform(features_to_scale)
     
