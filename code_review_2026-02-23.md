@@ -85,10 +85,10 @@ NVDA `AAII_option_vol_ratio` includes `dte/dse/earn_in_*`; CRDO `reference` incl
 
 ---
 
-### 11. `dropna` silently removes training rows without logging
+### 11. ~~`dropna` silently removes training rows without logging~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 302-303
 The last `target_size` rows have NaN labels (they look beyond the dataset end) and are silently dropped. No log of how many rows were removed or why.
-**Fix:** Log the count of dropped rows. Assert they are only the last N rows (not scattered through the data).
+**Fix:** Log count before/after. Warn loudly if `rows_dropped != target_size` (indicates unexpected NaN in feature columns, not just trailing label NaN).
 
 ---
 
@@ -223,7 +223,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 8 | ~~HIGH~~ FIXED | mainDelta:267-270 | Code | Debug prints left in production |
 | 9 | ~~HIGH~~ FIXED | fetchBulkData:2677,2749 | Data | Zero-fill for missing sentiment corrupts features |
 | 10 | ~~HIGH~~ PARTIAL | *_param.py | Config | Feature sets have diverged across stocks — accidental divergences fixed; intentional diffs remain |
-| 11 | HIGH | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
+| 11 | ~~HIGH~~ FIXED | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
 | 12 | HIGH | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
 | 13 | HIGH | trendAnalysis:380 | Error | No existence check before loading scaler file |
 | 14 | HIGH | trendAnalysis:397,985 | ML | Softmax applied inconsistently in inference vs. train |

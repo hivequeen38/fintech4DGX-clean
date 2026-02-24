@@ -299,8 +299,16 @@ def calculate_label(df: DataFrame, param: dict[str]):
     df['label'] = np.where(price_change <= -threshold, '2', df['label']) # 2 for significant decrease
 
 
-    # Drop the last n rows which will have NaN labels
+    # Drop the last n rows which will have NaN labels (future price unavailable)
+    rows_before = len(df)
     df.dropna(subset=['label'], inplace=True)
+    rows_dropped = rows_before - len(df)
+    expected_drops = param['target_size']
+    if rows_dropped != expected_drops:
+        print(f"WARNING: dropna removed {rows_dropped} rows but expected {expected_drops} "
+              f"(target_size={expected_drops}). Possible NaN in feature columns — check for data gaps.")
+    else:
+        print(f"dropna: removed {rows_dropped} trailing rows with NaN labels (expected). OK.")
 
     # Convert label column to integer
     df['label'] = df['label'].astype(int)
