@@ -278,11 +278,7 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
     # NVDA_1d_predictions_test.csv
     #
 
-    # dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(param)
-    result = fetchDateAndClosing(param)
-    print(f"fetchDateAndClosing returned: {result}")
-    print(f"Number of values: {len(result)}")
-    dateStr, closing_price, last_cp_vol, last_vol_ratio = result  # This will still error but you'll see the values
+    dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(param)
     processDeltaFromTodayResults(param["symbol"], incr_df, dateStr, closing_price, comment, last_cp_vol, param, last_vol_ratio)
 
     # RANDOM SEED

@@ -56,14 +56,14 @@ Lines 705-707 were an exact repeat of 702-704. Removed the duplicate. Also fixed
 
 ## HIGH SEVERITY ISSUES
 
-### 8. Debug prints left in production path
+### 8. ~~Debug prints left in production path~~ — FIXED 2026-02-24
 **File:** `mainDeltafromToday.py` lines 267-270
 ```python
 print(f"fetchDateAndClosing returned: {result}")
 print(f"Number of values: {len(result)}")
 ```
 These suggest uncertainty about the return type. Leave noise in logs and indicate unstable contract.
-**Fix:** Remove debug prints; add a proper assertion instead.
+**Fix:** Removed debug prints and old commented-out direct-unpack line; reverted to clean direct unpack.
 
 ---
 
@@ -216,7 +216,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 5 | ~~CRITICAL~~ FIXED | trendAnalysis:729 | ML | Hard-coded 3-class assumption crashes on 2-class fold |
 | 6 | ~~CRITICAL~~ FIXED | mainDelta:20-77 | Logic | fetchDateAndClosing returns 2/3/4-tuples; caller expects 4 — standardized to always return 4 values |
 | 7 | ~~CRITICAL~~ FIXED | trendAnalysis:705-707 | Code | Duplicate split assignment overwrites valid code silently |
-| 8 | HIGH | mainDelta:267-270 | Code | Debug prints left in production |
+| 8 | ~~HIGH~~ FIXED | mainDelta:267-270 | Code | Debug prints left in production |
 | 9 | HIGH | fetchBulkData:790 | Data | Zero-fill for missing sentiment corrupts features |
 | 10 | HIGH | *_param.py | Config | Feature sets have diverged across stocks |
 | 11 | HIGH | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
