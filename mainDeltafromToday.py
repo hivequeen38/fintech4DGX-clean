@@ -54,7 +54,7 @@ def fetchDateAndClosing(param: dict[str, any]):
         df = pd.read_csv(file_path)
     else:
         print('>>> ERROR, file '+ file_path + ' Not found!')
-        return None, None, None  # Return three None values to match return signature
+        return None, None, None, None  # Return four None values to match return signature
     
     # Instead of using the last row, filter by the specific date we want
     mask = df['date'] == last_date
@@ -72,9 +72,21 @@ def fetchDateAndClosing(param: dict[str, any]):
             last_options_vol = None
         return last_date, last_close, last_cp_vol, last_options_vol
     else:
-        print(f"Error: No data found for date {last_date}")
-        # Instead of sys.exit(1), return appropriate error values to handle at higher level
-        return last_date, None, None  # Indicates the date was valid but no data found
+        print(f"Error: No data found for date {last_date}, falling back to most recent available date")
+        # Fall back to the most recent available date in the TMP file
+        df_sorted = df.sort_values('date', ascending=False)
+        last_row = df_sorted.iloc[0]
+        fallback_date = last_row['date']
+        last_close = last_row['adjusted close']
+        last_cp_vol = 0
+        if 'cp_sentiment_ratio' in param['selected_columns'] and 'cp_sentiment_ratio' in df.columns:
+            last_cp_vol = last_row['cp_sentiment_ratio']
+        if 'options_volume_ratio' in param['selected_columns'] and 'options_volume_ratio' in df.columns:
+            last_options_vol = last_row['options_volume_ratio']
+        else:
+            last_options_vol = None
+        print(f"Falling back to date: {fallback_date}")
+        return fallback_date, last_close, last_cp_vol, last_options_vol
 
 # process result files
 def processDeltaFromTodayResults( symbol: str, incr_df: DataFrame, dateStr: str, closingPrice: float, comment: str, last_cp_vol: float, param: dict[str], last_vol_ratio=None):

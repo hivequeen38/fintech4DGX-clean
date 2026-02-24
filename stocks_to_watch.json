@@ -1,11 +1,11 @@
 {
     "NVDA": {
         "relevance_cutoff": 0.25,
-        "last_timestamp": "20260223T1954"
+        "last_timestamp": "20260223T2129"
     },
     "PLTR": {
         "relevance_cutoff": 0.25,
-        "last_timestamp": "20260223T1936"
+        "last_timestamp": "20260223T2106"
     },
     "APP": {
         "relevance_cutoff": 0.25,
@@ -13,7 +13,7 @@
     },
     "META": {
         "relevance_cutoff": 0.5,
-        "last_timestamp": "20260223T2003"
+        "last_timestamp": "20260223T2026"
     },
     "MSTR": {
         "relevance_cutoff": 0.25,
@@ -21,22 +21,22 @@
     },
     "CRDO": {
         "relevance_cutoff": 0.25,
-        "last_timestamp": "20260223T1156"
+        "last_timestamp": "20260223T2110"
     },
     "MSFT": {
         "relevance_cutoff": 0.5,
-        "last_timestamp": "20260223T1953"
+        "last_timestamp": "20260223T2057"
     },
     "GOOG": {
         "relevance_cutoff": 0.5,
-        "last_timestamp": "20260223T1537"
+        "last_timestamp": "20260223T1644"
     },
     "AMZN": {
         "relevance_cutoff": 0.5,
-        "last_timestamp": "20260223T1828"
+        "last_timestamp": "20260223T2045"
     },
     "CRYPTO:BTC": {
         "relevance_cutoff": 0.6,
-        "last_timestamp": "20260223T1946"
+        "last_timestamp": "20260223T2146"
     }
 }

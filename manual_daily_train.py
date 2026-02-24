@@ -1,4 +1,5 @@
 from datetime import datetime
+import pytz
 import get_daily_results
 import get_historical_html
 import mainDeltafromToday
@@ -16,9 +17,9 @@ import CRDO_param
 import ALAB_param
 import TSLA_param
 
-# ['NVDA', 'PLTR', 'APP', 'ANET', 'CRDO', 'ALAB' ]
-today_date_str = datetime.now().strftime("%Y-%m-%d")
-today_date_str = '2026-02-20'
+# ['CRDO', 'NVDA', 'PLTR', 'APP', 'INOD']
+today_date_str = datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d")
+# today_date_str = '2026-02-23'  # manual debug override
 
 response = input("Upload results to Google Cloud? (Y/N): ").strip().upper()
 upload_to_cloud = response == 'Y'
