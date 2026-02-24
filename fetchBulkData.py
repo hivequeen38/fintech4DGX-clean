@@ -16,6 +16,7 @@ from alpha_vantage.timeseries import TimeSeries
 from alpha_vantage.fundamentaldata import FundamentalData
 from alpha_vantage.cryptocurrencies import CryptoCurrencies
 from dateutil.relativedelta import relativedelta
+import fetch_eps_estimates
 
 def find_next_trading_day_no_day_of_week(input_df: DataFrame, df: DataFrame):
     '''
@@ -2527,7 +2528,24 @@ def fetch_all_data(config, param):
         df = compute_dte_dse_features(df, eff_sessions, symbol)
         print(f">DTE/DSE added for {symbol}. Latest dte={df['dte'].iloc[-1]:.0f}, dse={df['dse'].iloc[-1]:.0f}")
         # ── end DTE/DSE ────────────────────────────────────────────────────────
-    
+
+        # ── Analyst EPS estimate features (AV EARNINGS_ESTIMATES) ────────────
+        # Build fiscal→report mapping from income_df (already in scope, free).
+        fiscal_to_report_map = {
+            row["fiscalDateEnding"].strftime("%Y-%m-%d"): row["reportedDate"].strftime("%Y-%m-%d")
+            for _, row in income_df[income_df["reportedDate"].notna()].iterrows()
+        }
+        try:
+            df, _ = fetch_eps_estimates.build_daily_estimate_features(
+                symbol=symbol,
+                api_key=config["alpha_vantage"]["key"],
+                daily_df=df,
+                fiscal_to_report_map=fiscal_to_report_map,
+            )
+        except Exception as e:
+            print(f">  [EPS estimates] WARNING: failed for {symbol}: {e}. Skipping — features will be NaN.")
+        # ── end EPS estimate features ─────────────────────────────────────────
+
     #########################################################################
     # now get Monetary Base; Reserve Balances
     # BOGMBBM
