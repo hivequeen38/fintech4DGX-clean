@@ -950,7 +950,10 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         inputs = inputs.to(device)
         labels = labels.to(device)
         outputs = model(inputs)
-        preds = torch.argmax(outputs, dim=-1)
+        # Convention: apply softmax before argmax (consistent with inference and ROC paths).
+        # Softmax does not change the argmax result but ensures the probability convention
+        # is uniform across all paths, so confidence scores and future calibration work correctly.
+        preds = torch.argmax(torch.softmax(outputs, dim=-1), dim=-1)
 
         test_preds_flat = preds.cpu().numpy().flatten()    # Shape: [batch_size * seq_length]
         test_labels_flat = labels.cpu().numpy().flatten()  # Shape: [batch_size * seq_length]

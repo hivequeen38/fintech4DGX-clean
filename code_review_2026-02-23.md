@@ -106,10 +106,10 @@ If the `.joblib` scaler file is missing, the crash message is a cryptic joblib e
 
 ---
 
-### 14. Softmax applied inconsistently across inference vs. training paths
+### 14. ~~Softmax applied inconsistently across inference vs. training paths~~ — FIXED 2026-02-24
 **File:** `trendAnalysisFromTodayNew.py` lines 397, 985
 Inference manually applies softmax to logits before argmax. Training validation uses argmax directly on logits. Both give the same argmax result, but probability outputs (for confidence scores) will differ. Inconsistency makes it harder to add calibration later.
-**Fix:** Pick one convention and document it. For calibration use, always save raw logits.
+**Fix:** Aligned test loop to use `torch.argmax(torch.softmax(outputs, dim=-1), dim=-1)`, matching the inference and ROC paths. Convention documented in comment: softmax before argmax everywhere.
 
 ---
 
@@ -226,7 +226,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 11 | ~~HIGH~~ FIXED | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
 | 12 | ~~HIGH~~ FIXED | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
 | 13 | ~~HIGH~~ FIXED | trendAnalysis:380 | Error | No existence check before loading scaler file |
-| 14 | HIGH | trendAnalysis:397,985 | ML | Softmax applied inconsistently in inference vs. train |
+| 14 | ~~HIGH~~ FIXED | trendAnalysis:397,985 | ML | Softmax applied inconsistently in inference vs. train |
 | 15 | HIGH | trendAnalysis:889 | ML | NaN metrics written to results file silently |
 | 16 | MEDIUM | trendAnalysis:411 | Logic | Prediction timestamp from wall clock, not data max date |
 | 17 | MEDIUM | trendAnalysis:758 | ML | Batch size may exceed split size in edge cases |
