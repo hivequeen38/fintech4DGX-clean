@@ -2673,8 +2673,8 @@ def fetch_all_data(config, param):
         print('>Get Call/Put ratio data (OLD WAY)')
         file_path = symbol + '-cp_ratios_sentiment.csv'
         if not os.path.isfile(file_path):
-            print(f'Warning: {file_path} not found. cp_sentiment_ratio will be 0.')
-            df['cp_sentiment_ratio'] = 0.0
+            print(f'Warning: {file_path} not found. cp_sentiment_ratio will be NaN (not 0 — avoids false neutral signal).')
+            df['cp_sentiment_ratio'] = np.nan
         if os.path.isfile(file_path):
             # file exist
             df_cp_ratios = pd.read_csv(file_path)
@@ -2743,11 +2743,11 @@ def fetch_all_data(config, param):
             if not os.path.isfile(file_path):
                 print(f'')
                 print(f'⚠️ ⚠️ ⚠️  ALERT: {file_path} not found!')
-                print(f'⚠️  cp_sentiment_ratio and options_volume_ratio will be set to 0.0')
-                print(f'⚠️  This will result in missing feature data for the model!')
+                print(f'⚠️  cp_sentiment_ratio and options_volume_ratio will be set to NaN (not 0 — avoids false neutral signal).')
+                print(f'⚠️  Affected rows will be dropped during training via dropna.')
                 print(f'')
-                df['cp_sentiment_ratio'] = 0.0
-                df['options_volume_ratio'] = 0.0
+                df['cp_sentiment_ratio'] = np.nan
+                df['options_volume_ratio'] = np.nan
             if os.path.isfile(file_path):
                 # file exist
                 df_cp_ratios = pd.read_csv(file_path)

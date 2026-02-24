@@ -67,10 +67,10 @@ These suggest uncertainty about the return type. Leave noise in logs and indicat
 
 ---
 
-### 9. Zero-fill fallback for missing sentiment/CP ratio data
-**File:** `fetchBulkData.py` lines ~732, 748, 790
+### 9. ~~Zero-fill fallback for missing sentiment/CP ratio data~~ — FIXED 2026-02-24
+**File:** `fetchBulkData.py` lines ~2675-2677, ~2743-2750
 When a CP ratio CSV file is missing, all sentiment columns are filled with 0. Zero is not a neutral value — it signals strong bearish sentiment in most encodings. This silently corrupts features for affected date ranges.
-**Fix:** Use forward-fill (`ffill`) or mark as NaN and let the model handle it, rather than filling with 0.
+**Fix:** Changed both old-path (line ~2677) and new-path (lines ~2749-2750) to assign `np.nan` instead of `0.0`. Affected rows are dropped by the existing `dropna` in training — honest missingness rather than a false neutral signal.
 
 ---
 
@@ -217,7 +217,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 6 | ~~CRITICAL~~ FIXED | mainDelta:20-77 | Logic | fetchDateAndClosing returns 2/3/4-tuples; caller expects 4 — standardized to always return 4 values |
 | 7 | ~~CRITICAL~~ FIXED | trendAnalysis:705-707 | Code | Duplicate split assignment overwrites valid code silently |
 | 8 | ~~HIGH~~ FIXED | mainDelta:267-270 | Code | Debug prints left in production |
-| 9 | HIGH | fetchBulkData:790 | Data | Zero-fill for missing sentiment corrupts features |
+| 9 | ~~HIGH~~ FIXED | fetchBulkData:2677,2749 | Data | Zero-fill for missing sentiment corrupts features |
 | 10 | HIGH | *_param.py | Config | Feature sets have diverged across stocks |
 | 11 | HIGH | trendAnalysis:302 | Data | Silent row drop via dropna — no logging |
 | 12 | HIGH | trendAnalysis:369 | Error | No check that selected_columns exist in dataframe |
