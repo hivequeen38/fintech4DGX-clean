@@ -47,11 +47,11 @@ AAII_option_vol_ratio = {
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
-        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
-        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
-        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
-        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
 
         ##################################
         # Stock Momentum
@@ -247,11 +247,11 @@ AAII_reference = {
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
-        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
-        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
-        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
-        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
 
         ##################################
         # Stock Momentum
@@ -447,11 +447,11 @@ reference = {
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
-        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
-        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
-        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
-        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
 
         ##################################
         # Stock Momentum
@@ -640,11 +640,11 @@ mz_reference = {
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
-        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
-        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
-        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
-        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
 
         ##################################
         # Stock Momentum
@@ -830,11 +830,11 @@ AAII_all = {
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
-        'eps_est_avg',          # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        'eps_rev_30_pct',       # % revision in consensus over trailing 30 days
-        'eps_rev_7_pct',        # % revision in consensus over trailing 7 days
-        'eps_breadth_ratio_30', # net analyst conviction score (-1..+1), 30-day window
-        'eps_dispersion',       # (high-low)/|avg| — analyst uncertainty / disagreement
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
 
         ##################################
         # Stock Momentum 

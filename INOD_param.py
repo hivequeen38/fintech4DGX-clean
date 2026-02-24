@@ -38,6 +38,16 @@ AAII_option_vol_ratio = {
         'totalRevenue',
         'netIncome',
         
+
+        ##################################
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+
         ##################################
         # Stock Momentum 
         ##################################
@@ -184,6 +194,16 @@ AAII_Min_features = {
         'totalRevenue',
         'netIncome',
         
+
+        ##################################
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+
         ##################################
         # Stock Momentum 
         ##################################
@@ -334,6 +354,16 @@ AAII_reference = {
         'totalRevenue',
         'netIncome',
         
+
+        ##################################
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+
         ##################################
         # Stock Momentum 
         ##################################
@@ -485,6 +515,16 @@ reference = {
         'totalRevenue',
         'netIncome',
         
+
+        ##################################
+        # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
+        ##################################
+        'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
+        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+
         ##################################
         # Stock Momentum 
         ##################################
