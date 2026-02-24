@@ -2543,7 +2543,11 @@ def fetch_all_data(config, param):
                 fiscal_to_report_map=fiscal_to_report_map,
             )
         except Exception as e:
-            print(f">  [EPS estimates] WARNING: failed for {symbol}: {e}. Skipping — features will be NaN.")
+            print(f">  [EPS estimates] WARNING: failed for {symbol}: {e}. Filling features with NaN.")
+            # Add NaN columns so selected_columns validation doesn't crash downstream.
+            import numpy as np
+            for col in fetch_eps_estimates.DAILY_FEATURE_COLS:
+                df[col] = np.nan
         # ── end EPS estimate features ─────────────────────────────────────────
 
     #########################################################################
