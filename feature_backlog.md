@@ -11,7 +11,7 @@ Prioritized by expected signal value for a 1–3 week horizon.
 |---|---|---|---|
 | 1 | `earnings_is_bmo`, `earnings_is_amc` | Earnings timing | **IMPLEMENTED** 2026-02-25 — computed & stored in TMP.csv; NOT in selected_columns yet (constant for all-AMC universe; activate when BMO stock added) |
 | 2 | `ret_5d_rel_SPY`, `ret_10d_rel_SPY`, `ret_5d_rel_SMH`, `ret_10d_rel_SMH` | Cross-sectional alpha | **IMPLEMENTED** 2026-02-25 |
-| 3+4 | `iv_earn_move`, `iv_term = IV_7D − IV_30D` | Options IV | **Planned** — see §Options Plan below; data sourcing is the bottleneck |
+| 3+4 | `iv_30d`, `iv_skew_30d`, `iv_term_ratio` | Options IV | **IMPLEMENTED** 2026-02-25 — extracted from existing AV HISTORICAL_OPTIONS fetch in same API call; backfill auto-runs on next training pass |
 | 5 | `short_interest_pct_float` (or `days_to_cover`) | Short interest | Backlog — low cadence limits daily utility |
 
 **Note:** `is_earnings_day`, `is_post_earnings_day_1/2/3` were removed from top-5 — largely redundant
@@ -338,3 +338,11 @@ To activate any backlog feature:
 
 **Baseline** (NVDA `reference` shuffle, target_size=1, end_date=2026-02-23, post-bug-fix, pre-EPS):
 - F1 class 0 (neutral): 0.716 | F1 class 1 (UP): 0.214 | F1 class 2 (DN): 0.212
+
+---
+
+## Technical Debt / Code Review
+
+| Task | Priority | Notes |
+|---|---|---|
+| Code review CP Ratio code | Medium | Review `get_historical_cp_ratios_with_sentiments_new()` and all CP ratio processing in `fetchBulkData.py` for correctness, edge cases, and IV backfill behavior after IV feature addition |

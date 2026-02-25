@@ -1248,67 +1248,83 @@ def clean_cp_ratio_file(symbol):
 
 def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key):
     """
-    Get C/P ratios for dates provided in DataFrame with improved handling of edge cases
-    Continues from where it left off if a saved file exists
+    Get C/P ratios and IV features for dates provided in DataFrame.
+    Continues from where it left off if a saved file exists.
+
+    IV columns (iv_7d, iv_30d, iv_90d, iv_skew_30d, iv_term_ratio) are computed
+    alongside CP ratios from the same HISTORICAL_OPTIONS API call — no extra requests.
+    Existing rows missing IV columns are detected and re-fetched automatically (backfill).
     """
     file_path = f"{symbol}-cp_ratios_sentiment_w_volume.csv"
-    
+    IV_COLS = ['iv_7d', 'iv_30d', 'iv_90d', 'iv_skew_30d', 'iv_term_ratio']
+
     # Clean up the existing file first to remove duplicates
     if os.path.exists(file_path):
         print("First cleaning the existing file to remove duplicates...")
         clean_cp_ratio_file(symbol)
-    
-    # First create an empty DataFrame with the correct structure and types
+
+    # Empty DataFrame with full schema (CP + IV columns)
     results_df = pd.DataFrame(columns=[
         'date', 'call_volume', 'put_volume', 'call_oi', 'put_oi',
         'cp_volume_ratio', 'cp_oi_ratio', 'daily_sentiment',
-        'bullish_volume', 'bearish_volume'
+        'bullish_volume', 'bearish_volume',
+        'iv_7d', 'iv_30d', 'iv_90d', 'iv_skew_30d', 'iv_term_ratio'
     ])
-    
-    # Set proper dtypes upfront
     results_df = results_df.astype({
         'date': 'object',
-        'call_volume': 'float64',
-        'put_volume': 'float64',
-        'call_oi': 'float64',
-        'put_oi': 'float64',
-        'cp_volume_ratio': 'float64',
-        'cp_oi_ratio': 'float64',
+        'call_volume': 'float64', 'put_volume': 'float64',
+        'call_oi': 'float64', 'put_oi': 'float64',
+        'cp_volume_ratio': 'float64', 'cp_oi_ratio': 'float64',
         'daily_sentiment': 'object',
-        'bullish_volume': 'float64',
-        'bearish_volume': 'float64'
+        'bullish_volume': 'float64', 'bearish_volume': 'float64',
+        'iv_7d': 'float64', 'iv_30d': 'float64', 'iv_90d': 'float64',
+        'iv_skew_30d': 'float64', 'iv_term_ratio': 'float64'
     })
-    
-    # Check if we already have saved results
+
+    new_dates_set = set()
     if os.path.exists(file_path):
-        # Load existing results
         existing_df = pd.read_csv(file_path)
-        
-        # Find dates that haven't been processed yet
+
+        # Add IV columns if this is the first run with IV support
+        for c in IV_COLS:
+            if c not in existing_df.columns:
+                existing_df[c] = np.nan
+
         processed_dates = set(existing_df['date'])
         all_dates = set(dates_df['date'])
         remaining_dates = sorted(list(all_dates - processed_dates))
-        
+        new_dates_set = set(remaining_dates)
+
+        # Dates in CSV but still missing iv_30d need IV backfill (re-fetch)
+        iv_backfill_dates = existing_df[existing_df['iv_30d'].isna()]['date'].tolist()
+        # Exclude dates that will be fetched fresh anyway
+        iv_backfill_dates = [d for d in iv_backfill_dates if d not in new_dates_set]
+
         print(f"Found existing file with {len(existing_df)} entries")
-        print(f"Continuing with {len(remaining_dates)} remaining dates")
-        
-        # Start with the de-duplicated existing data
+        print(f"New dates to fetch: {len(remaining_dates)}, IV backfill dates: {len(iv_backfill_dates)}")
+
         results_df = existing_df.copy()
-        
-        # Update dates_df to only include remaining dates
-        dates_to_process_df = pd.DataFrame({'date': remaining_dates})
+        all_to_process = sorted(list(set(remaining_dates + iv_backfill_dates)))
+        dates_to_process_df = pd.DataFrame({'date': all_to_process})
     else:
         print(f"Starting fresh - no existing file found")
         dates_to_process_df = dates_df.copy()
-    
-    # Track if we added any new data
+        new_dates_set = set(dates_df['date'])
+
     new_data_added = False
-    
-    # Only process the remaining dates
+
+    def _oi_weighted_iv(subset):
+        """OI-weighted average IV; falls back to simple mean when OI is all zero."""
+        w = subset['open_interest'].fillna(0)
+        if w.sum() == 0:
+            return float(subset['implied_volatility'].mean())
+        return float((subset['implied_volatility'] * w).sum() / w.sum())
+
     for date_str in dates_to_process_df['date']:
         try:
-            print(f"Fetching data for {date_str}")
-            
+            is_new_date = date_str in new_dates_set
+            print(f"Fetching data for {date_str} {'(new)' if is_new_date else '(IV backfill)'}")
+
             response = requests.get(
                 "https://www.alphavantage.co/query",
                 params={
@@ -1318,65 +1334,59 @@ def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key):
                     "apikey": api_key
                 }
             )
-            
+
             data = response.json()
-            
-            # Initialize row with zeros and default values
+
             row = {
                 'date': date_str,
-                'call_volume': 0.0,
-                'put_volume': 0.0,
-                'call_oi': 0.0,
-                'put_oi': 0.0,
-                'cp_volume_ratio': 0.0,
-                'cp_oi_ratio': 0.0,
+                'call_volume': 0.0, 'put_volume': 0.0,
+                'call_oi': 0.0, 'put_oi': 0.0,
+                'cp_volume_ratio': 0.0, 'cp_oi_ratio': 0.0,
                 'daily_sentiment': 'no_trades',
-                'bullish_volume': 0.0,
-                'bearish_volume': 0.0
+                'bullish_volume': 0.0, 'bearish_volume': 0.0,
+                'iv_7d': np.nan, 'iv_30d': np.nan, 'iv_90d': np.nan,
+                'iv_skew_30d': np.nan, 'iv_term_ratio': np.nan
             }
-            
+
             if "data" in data and data["data"]:
                 df = pd.DataFrame(data["data"])
-                
+
                 if not df.empty:
-                    # Convert numeric columns
+                    # Convert numeric columns used by CP metrics
                     for col in ['volume', 'open_interest', 'bid', 'ask', 'last']:
                         if col in df.columns:
                             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-                    
+
                     # Calculate midpoint
                     df['mid'] = ((df['bid'] + df['ask']) / 2).fillna(df['last'])
-                    
+
                     # Calculate sentiment
-                    df['sentiment'] = df.apply(lambda x: 
+                    df['sentiment'] = df.apply(lambda x:
                         'no_trade' if x['volume'] == 0 or pd.isna(x['last']) else
-                        'bullish' if (x['last'] >= x['mid'] and x['type'] == 'call') or 
+                        'bullish' if (x['last'] >= x['mid'] and x['type'] == 'call') or
                                     (x['last'] < x['mid'] and x['type'] == 'put') else
                         'bearish', axis=1)
-                    
+
                     # Calculate totals by type
                     type_totals = df.groupby('type').agg({
                         'volume': 'sum',
                         'open_interest': 'sum'
                     }).fillna(0)
-                    
-                    # Extract values safely
+
+                    # Extract CP values safely
                     row['call_volume'] = float(type_totals.loc['call', 'volume']) if 'call' in type_totals.index else 0.0
-                    row['put_volume'] = float(type_totals.loc['put', 'volume']) if 'put' in type_totals.index else 0.0
-                    row['call_oi'] = float(type_totals.loc['call', 'open_interest']) if 'call' in type_totals.index else 0.0
-                    row['put_oi'] = float(type_totals.loc['put', 'open_interest']) if 'put' in type_totals.index else 0.0
-                    
-                    # Calculate ratios
+                    row['put_volume']  = float(type_totals.loc['put',  'volume']) if 'put'  in type_totals.index else 0.0
+                    row['call_oi']     = float(type_totals.loc['call', 'open_interest']) if 'call' in type_totals.index else 0.0
+                    row['put_oi']      = float(type_totals.loc['put',  'open_interest']) if 'put'  in type_totals.index else 0.0
+
                     if row['put_volume'] > 0:
                         row['cp_volume_ratio'] = row['call_volume'] / row['put_volume']
                     if row['put_oi'] > 0:
                         row['cp_oi_ratio'] = row['call_oi'] / row['put_oi']
-                    
-                    # Calculate sentiment volumes
+
                     row['bullish_volume'] = float(df[df['sentiment'] == 'bullish']['volume'].sum())
                     row['bearish_volume'] = float(df[df['sentiment'] == 'bearish']['volume'].sum())
-                    
-                    # Determine overall sentiment
+
                     if row['bullish_volume'] == 0 and row['bearish_volume'] == 0:
                         row['daily_sentiment'] = 'no_trades'
                     elif row['bullish_volume'] > row['bearish_volume']:
@@ -1385,62 +1395,101 @@ def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key):
                         row['daily_sentiment'] = 'bearish'
                     else:
                         row['daily_sentiment'] = 'neutral'
-            
-            # Add as a new row - we've already filtered out processed dates
-            results_df.loc[len(results_df)] = row
+
+                    # ── IV features ──────────────────────────────────────────────────
+                    # Compute OI-weighted avg IV per expiry bucket from the same chain.
+                    # OI-weighting concentrates weight near ATM (highest OI cluster),
+                    # giving a good ATM-IV proxy without needing the spot price.
+                    if 'implied_volatility' in df.columns and 'expiration' in df.columns:
+                        for col in ['implied_volatility', 'strike']:
+                            if col in df.columns:
+                                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                        df['dte'] = (pd.to_datetime(df['expiration']) - pd.to_datetime(date_str)).dt.days
+                        # Only keep contracts with positive IV and not yet expired
+                        df_iv = df[(df['implied_volatility'] > 0) & (df['dte'] > 0)].copy()
+
+                        # 7d bucket: weekly options; captures very near-term event risk
+                        m7 = (df_iv['dte'] >= 1) & (df_iv['dte'] <= 10)
+                        if m7.sum() > 0:
+                            row['iv_7d'] = _oi_weighted_iv(df_iv[m7])
+
+                        # 30d bucket: front-month; the standard IV benchmark
+                        m30 = (df_iv['dte'] >= 20) & (df_iv['dte'] <= 45)
+                        if m30.sum() > 0:
+                            row['iv_30d'] = _oi_weighted_iv(df_iv[m30])
+                            df30 = df_iv[m30]
+                            calls30 = df30[df30['type'] == 'call']
+                            puts30  = df30[df30['type'] == 'put']
+                            call_iv = _oi_weighted_iv(calls30) if len(calls30) > 0 else np.nan
+                            put_iv  = _oi_weighted_iv(puts30)  if len(puts30)  > 0 else np.nan
+                            # Skew: put IV premium over calls (positive = fear)
+                            if pd.notna(call_iv) and pd.notna(put_iv):
+                                row['iv_skew_30d'] = put_iv - call_iv
+
+                        # 90d bucket: back-month; longer-dated baseline
+                        m90 = (df_iv['dte'] >= 60) & (df_iv['dte'] <= 120)
+                        if m90.sum() > 0:
+                            row['iv_90d'] = _oi_weighted_iv(df_iv[m90])
+
+                        # Term ratio: 7d / 30d  (> 1 = short-dated vol elevated = event risk)
+                        if pd.notna(row['iv_7d']) and pd.notna(row['iv_30d']) and row['iv_30d'] > 0:
+                            row['iv_term_ratio'] = row['iv_7d'] / row['iv_30d']
+
+            if is_new_date:
+                # Append full new row
+                results_df.loc[len(results_df)] = row
+            else:
+                # IV backfill: only update the IV columns in the existing row
+                mask = results_df['date'] == date_str
+                for c in IV_COLS:
+                    results_df.loc[mask, c] = row[c]
+
             new_data_added = True
-            
-            # Save after processing each date
-            if new_data_added:
-                # For safety, explicitly drop duplicates before saving
-                results_df = results_df.drop_duplicates(subset=['date'])
-                results_df.to_csv(file_path, index=False)
-                print(f"Saved data: {len(results_df)} total unique entries")
-            
+
+            # Save after every date
+            results_df = results_df.drop_duplicates(subset=['date'])
+            results_df.to_csv(file_path, index=False)
+            print(f"Saved data: {len(results_df)} total unique entries")
+
             time.sleep(12)
-            
+
         except Exception as e:
             print(f"Error processing {date_str}: {e}")
             continue
-    
-    # Force fill any remaining NaN values
-    float_cols = ['call_volume', 'put_volume', 'call_oi', 'put_oi', 
-                  'cp_volume_ratio', 'cp_oi_ratio', 'bullish_volume', 'bearish_volume']
-    
-    results_df[float_cols] = results_df[float_cols].fillna(0.0)
+
+    # Fill NaN for CP columns only (IV NaN is meaningful — no data for that expiry bucket)
+    cp_float_cols = ['call_volume', 'put_volume', 'call_oi', 'put_oi',
+                     'cp_volume_ratio', 'cp_oi_ratio', 'bullish_volume', 'bearish_volume']
+    results_df[cp_float_cols] = results_df[cp_float_cols].fillna(0.0)
     results_df['daily_sentiment'] = results_df['daily_sentiment'].fillna('no_trades')
-    
-    # Set index and sort
+
+    # Sort and save final result
     if not results_df.empty:
-        # First save a sorted version
         results_df_sorted = results_df.sort_values(by='date')
         results_df_sorted.to_csv(file_path, index=False)
-        
-        # Now continue with processing
         results_df.set_index('date', inplace=True)
         results_df.sort_index(inplace=True)
         results_df.reset_index(inplace=True)
-    
-    # Final check to ensure no NaN values
+
+    # Final fill for CP columns (not IV)
     results_df = results_df.fillna({
-        'call_volume': 0.0,
-        'put_volume': 0.0,
-        'call_oi': 0.0,
-        'put_oi': 0.0,
-        'cp_volume_ratio': 0.0,
-        'cp_oi_ratio': 0.0,
+        'call_volume': 0.0, 'put_volume': 0.0,
+        'call_oi': 0.0, 'put_oi': 0.0,
+        'cp_volume_ratio': 0.0, 'cp_oi_ratio': 0.0,
         'daily_sentiment': 'no_trades',
-        'bullish_volume': 0.0,
-        'bearish_volume': 0.0
+        'bullish_volume': 0.0, 'bearish_volume': 0.0
     })
-    
-    # only keep the required columns
-    columns = ['date', 'call_volume', 'put_volume', 'cp_volume_ratio', 'cp_oi_ratio', 'bullish_volume', 'bearish_volume']
-    if all(col in results_df.columns for col in columns):
-        results_df = results_df[columns]
-    
-    print(results_df.to_string())  # This will show all values
-    print(results_df.dtypes)  # This will show the data types of each column
+
+    # Return all CP + IV columns that are present
+    all_cols = ['date', 'call_volume', 'put_volume', 'cp_volume_ratio', 'cp_oi_ratio',
+                'bullish_volume', 'bearish_volume', 'iv_7d', 'iv_30d', 'iv_90d',
+                'iv_skew_30d', 'iv_term_ratio']
+    available_cols = [c for c in all_cols if c in results_df.columns]
+    results_df = results_df[available_cols]
+
+    print(results_df.to_string())
+    print(results_df.dtypes)
     return results_df
 
 import time
@@ -2947,8 +2996,10 @@ def fetch_all_data(config, param):
                     result_df = get_historical_cp_ratios_with_sentiments_new(symbol, missing_dates, api_key)
                     result_df_copy = result_df.copy()
 
-                    columns = ['date', 'call_volume', 'put_volume', 'cp_volume_ratio','cp_oi_ratio', 'bullish_volume', 'bearish_volume']
-                    result_df = result_df[columns]
+                    all_cp_cols = ['date', 'call_volume', 'put_volume', 'cp_volume_ratio', 'cp_oi_ratio',
+                                   'bullish_volume', 'bearish_volume',
+                                   'iv_7d', 'iv_30d', 'iv_90d', 'iv_skew_30d', 'iv_term_ratio']
+                    result_df = result_df[[c for c in all_cp_cols if c in result_df.columns]]
 
                     # append the result to the df_cp_ratio and write id back to disk
                     new_cp_df = pd.concat([df_cp_ratios, result_df], ignore_index=True)

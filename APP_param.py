@@ -148,7 +148,13 @@ AAII_option_vol_ratio = {
         # 'rs_apps_trend',
         # 'cp_volume_ratio',
         'cp_sentiment_ratio',
-        'options_volume_ratio'
+        'options_volume_ratio',
+        ##################################
+        # Implied Volatility features
+        ##################################
+        'iv_30d',        # front-month OI-weighted IV (20-45 DTE): overall vol regime
+        'iv_skew_30d',   # put IV minus call IV (30d): fear premium
+        'iv_term_ratio', # iv_7d / iv_30d: >1 = short-dated vol elevated = event risk
     ],
      "window_size": 35,
     "target_size": 15,
