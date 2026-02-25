@@ -1558,6 +1558,121 @@ def compute_dte_dse_features(df, eff_sessions, symbol):
     return df
 
 
+def compute_bmo_amc_features(df, eff_sessions, eff_is_bmo):
+    """
+    Forward-fill earnings_is_bmo / earnings_is_amc into daily rows.
+
+    Parameters
+    ----------
+    df : DataFrame with a 'date' column (str 'YYYY-MM-DD'), sorted ascending.
+    eff_sessions : list of datetime-like — sorted effective earnings dates,
+        parallel to eff_is_bmo.  Same list used by compute_dte_dse_features.
+    eff_is_bmo : list of bool — True if that session's report is pre-market (BMO),
+        False if post-market (AMC).  Must be same length as eff_sessions.
+
+    Returns
+    -------
+    DataFrame with two new columns:
+        earnings_is_bmo – 1 if the upcoming earnings report is pre-market, else 0
+        earnings_is_amc – 1 if the upcoming earnings report is post-market, else 0
+    Convention: forward-filled from the prior eff_session to the next eff_session
+    (same window as DTE).  Default: AMC (is_amc=1) when timing is unknown or
+    no upcoming report is in the data.
+    """
+    import numpy as np
+    df = df.copy()
+    td = pd.to_datetime(df['date']).reset_index(drop=True)
+    n = len(td)
+
+    eff = pd.DatetimeIndex(pd.to_datetime(list(eff_sessions))).sort_values()
+    # Build lookup: eff_date → is_bmo; use index position to align with sorted eff
+    eff_sorted_is_bmo = [bool(eff_is_bmo[i])
+                         for i in sorted(range(len(eff_sessions)),
+                                         key=lambda k: pd.to_datetime(eff_sessions[k]))]
+
+    is_bmo_arr = np.zeros(n, dtype=int)
+    is_amc_arr = np.ones(n, dtype=int)   # default: AMC
+
+    for i in range(n):
+        d = td.iloc[i]
+        nj = eff.searchsorted(d, side='left')
+        if nj < len(eff):
+            is_bmo = eff_sorted_is_bmo[nj]
+            is_bmo_arr[i] = int(is_bmo)
+            is_amc_arr[i] = int(not is_bmo)
+        # else: beyond last eff_session → stay at default (AMC)
+
+    df['earnings_is_bmo'] = is_bmo_arr
+    df['earnings_is_amc'] = is_amc_arr
+    return df
+
+
+def fetch_next_report_timing(symbol, api_key):
+    """
+    Try to determine whether the next earnings report for `symbol` is BMO or AMC.
+
+    Priority:
+      1. Alpha Vantage EARNINGS_CALENDAR CSV — timeOfTheDay column
+         (more reliable than the EARNINGS endpoint's placeholder reportTime)
+      2. yfinance earnings_dates — timezone-aware index hour
+         (hour < 12 = BMO; hour >= 16 = AMC; hour == 9 = unconfirmed)
+
+    Returns
+    -------
+    bool : True if BMO (pre-market), False if AMC or unknown.
+    Defaults to False (AMC / post-market) if timing cannot be determined,
+    which is correct for all current active tickers (NVDA, CRDO, PLTR, APP, INOD).
+    """
+    # 1. AV EARNINGS_CALENDAR
+    try:
+        from io import StringIO
+        url = (
+            f"https://www.alphavantage.co/query?function=EARNINGS_CALENDAR"
+            f"&symbol={symbol}&horizon=3month&apikey={api_key}"
+        )
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200 and resp.content:
+            df_ec = pd.read_csv(StringIO(resp.text))
+            if 'symbol' in df_ec.columns and 'reportDate' in df_ec.columns and 'timeOfTheDay' in df_ec.columns:
+                df_ec = df_ec[df_ec['symbol'] == symbol].copy()
+                if not df_ec.empty:
+                    df_ec['reportDate'] = pd.to_datetime(df_ec['reportDate'])
+                    upcoming = df_ec[
+                        df_ec['reportDate'] >= pd.Timestamp.today().normalize()
+                    ].sort_values('reportDate')
+                    if not upcoming.empty:
+                        tod = str(upcoming.iloc[0]['timeOfTheDay']).lower().strip()
+                        if tod == 'pre-market':
+                            print(f">  [AV] {symbol} next earnings: BMO (pre-market)")
+                            return True
+                        elif tod == 'post-market':
+                            print(f">  [AV] {symbol} next earnings: AMC (post-market)")
+                            return False
+    except Exception as e:
+        print(f">  [AV] EARNINGS_CALENDAR timing fetch failed for {symbol}: {e}")
+
+    # 2. yfinance — timezone-aware index encodes report time
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        ed = ticker.get_earnings_dates(limit=10)
+        if ed is not None and not ed.empty:
+            today = pd.Timestamp.today().normalize()
+            upcoming = ed[pd.to_datetime(ed.index).normalize() >= today]
+            if not upcoming.empty:
+                hour = upcoming.index[0].hour
+                if hour != 9:   # 9 = unconfirmed Yahoo placeholder
+                    is_bmo = hour < 12
+                    label = "BMO (pre-market)" if is_bmo else "AMC (post-market)"
+                    print(f">  [yfinance] {symbol} next earnings: {label} (index hour={hour})")
+                    return is_bmo
+    except Exception as e:
+        print(f">  [yfinance] earnings timing fetch failed for {symbol}: {e}")
+
+    print(f">  [timing] {symbol}: cannot determine BMO/AMC — defaulting to AMC (post-market)")
+    return False   # default: AMC
+
+
 def fetch_next_report_date(symbol, api_key):
     """
     Try to fetch the next upcoming earnings date for `symbol` from live sources.
@@ -2382,6 +2497,7 @@ def fetch_all_data(config, param):
         # Get EPS data
         #
         print('>Get EPS data for symbol= ', symbol)
+        report_time_map = {}   # {reportedDate str → is_bmo bool}; populated below
         attempt = 0
         max_attempts = 12
         while attempt < max_attempts:
@@ -2404,6 +2520,16 @@ def fetch_all_data(config, param):
 
                         # Create DataFrame
                         eps_df = pd.DataFrame(earnings_data)
+
+                        # Extract report timing (BMO/AMC) BEFORE the filter below
+                        # drops the 'reportTime' column.  Values: "pre-market" / "post-market".
+                        report_time_map = {}  # {reportedDate str → is_bmo bool}
+                        if 'reportTime' in eps_df.columns:
+                            for _, rt_row in eps_df.iterrows():
+                                rd_str = str(rt_row.get('reportedDate', ''))
+                                rt_str = str(rt_row.get('reportTime', '')).lower().strip()
+                                if rd_str and rt_str:
+                                    report_time_map[rd_str] = (rt_str == 'pre-market')
 
                         # Rename columns if necessary
                         eps_df.rename(columns={'reportedEPS': 'EPS', 'estimatedEPS': 'estEPS'}, inplace=True)
@@ -2466,6 +2592,18 @@ def fetch_all_data(config, param):
         # conver that date back to object which is required for a merge
         combined_finance_df['date'] = combined_finance_df['date'].dt.strftime('%Y-%m-%d')
 
+        # Build eff_session → is_bmo mapping BEFORE reportedDate is dropped by
+        # the filter below.  'date' here is shifted_reportedDate (the effective
+        # trading session), 'reportedDate' is the original report date.
+        eff_timing_map = {}   # {eff_date str → is_bmo bool}
+        for _, cfrow in combined_finance_df.iterrows():
+            rd = cfrow.get('reportedDate')
+            eff_d = cfrow.get('date')   # already renamed from shifted_reportedDate
+            if pd.notna(rd) and pd.notna(eff_d):
+                rd_str = pd.to_datetime(rd).strftime('%Y-%m-%d')
+                # Default AMC (False) if not in report_time_map
+                eff_timing_map[str(eff_d)] = report_time_map.get(rd_str, False)
+
         # Only keep the following columns
         combined_finance_df = combined_finance_df.filter(items=['date', 'EPS', 'estEPS', 'surprisePercentage', 'netIncome', 'totalRevenue'])
 
@@ -2486,16 +2624,16 @@ def fetch_all_data(config, param):
         # Merge with existing dataframe
         df = merge_feed_data_frame(df, combined_finance_df)
 
-        # ── DTE / DSE: trading-day distance to next/last earnings ─────────────
-        # Effective sessions: the shifted_reportedDate values already computed
-        # above (next trading day after each report, since AV gives date-only so
-        # we conservatively assume AMC).  These are the 'date' values in
-        # combined_finance_df rows that have EPS data.
-        eff_sessions = (
-            pd.to_datetime(combined_finance_df.loc[combined_finance_df['EPS'].notna(), 'date'])
-            .sort_values()
-            .tolist()
-        )
+        # ── DTE / DSE / BMO-AMC: earnings-proximity and timing features ─────────
+        # Build eff_sessions and parallel eff_is_bmo list.
+        # Historical effective sessions = next trading day after each report date
+        # (shifted_reportedDate, computed above). eff_timing_map maps each
+        # eff_date string → is_bmo bool (extracted before combined_finance_df filter).
+        hist_rows = combined_finance_df.loc[combined_finance_df['EPS'].notna()].copy()
+        hist_rows = hist_rows.sort_values('date')
+        eff_sessions = pd.to_datetime(hist_rows['date']).tolist()
+        eff_is_bmo   = [eff_timing_map.get(str(d_str), False)
+                        for d_str in hist_rows['date']]
 
         # Determine the next report date.
         # Priority: param override → live fetch (AV then yfinance) → +3 months estimate
@@ -2503,8 +2641,11 @@ def fetch_all_data(config, param):
         if next_report_date_param:
             nrd = pd.to_datetime(next_report_date_param)
             print(f">Next earnings for {symbol}: {nrd.date()} (from param — manual override)")
+            # Timing for param override: try live fetch, then default AMC
+            next_is_bmo = fetch_next_report_timing(symbol, config["alpha_vantage"]["key"])
         else:
             nrd = fetch_next_report_date(symbol, config["alpha_vantage"]["key"])
+            next_is_bmo = fetch_next_report_timing(symbol, config["alpha_vantage"]["key"])
             if nrd is None:
                 if eff_sessions:
                     last_known = pd.to_datetime(eff_sessions[-1])
@@ -2516,18 +2657,37 @@ def fetch_all_data(config, param):
 
         if nrd is not None:
             df_dates = pd.to_datetime(df['date'])
-            # Next trading day after the report date (AMC assumption)
-            candidates = df_dates[df_dates > nrd]
+            if next_is_bmo:
+                # BMO: report is visible in the open price on report day itself
+                candidates = df_dates[df_dates >= nrd]
+            else:
+                # AMC (default): effective session is the next trading day after the report
+                candidates = df_dates[df_dates > nrd]
             if not candidates.empty:
                 eff_sessions.append(candidates.min())
             else:
                 # Report is beyond our price history; add raw date for approximation
                 eff_sessions.append(nrd)
-            eff_sessions = sorted(set(eff_sessions))
+            eff_is_bmo.append(next_is_bmo)
+
+            # Keep both lists sorted and deduplicated by date
+            combined_eff = sorted(zip(eff_sessions, eff_is_bmo), key=lambda x: pd.to_datetime(x[0]))
+            # Dedup: if two entries share the same date, keep the last (most recent timing info)
+            seen = {}
+            for d, b in combined_eff:
+                seen[pd.to_datetime(d)] = b
+            eff_sessions = sorted(seen.keys())
+            eff_is_bmo   = [seen[d] for d in eff_sessions]
 
         df = compute_dte_dse_features(df, eff_sessions, symbol)
         print(f">DTE/DSE added for {symbol}. Latest dte={df['dte'].iloc[-1]:.0f}, dse={df['dse'].iloc[-1]:.0f}")
-        # ── end DTE/DSE ────────────────────────────────────────────────────────
+
+        # BMO/AMC: forward-fill report timing flag (stored in TMP.csv; not yet in
+        # selected_columns — constant feature for current all-AMC stock universe).
+        df = compute_bmo_amc_features(df, eff_sessions, eff_is_bmo)
+        bmo_count = int(df['earnings_is_bmo'].sum())
+        print(f">BMO/AMC added for {symbol}. BMO rows: {bmo_count}, AMC rows: {len(df)-bmo_count}")
+        # ── end DTE/DSE/BMO-AMC ───────────────────────────────────────────────
 
         # ── Analyst EPS estimate features (AV EARNINGS_ESTIMATES) ────────────
         # Build fiscal→report mapping from income_df (already in scope, free).
