@@ -276,6 +276,21 @@ def DEPRECATED_download_data(config, param):
     df['rs_sp500_trend'] = df['rs_sp500'].pct_change(15)
     df['rs_nasdaq_trend'] = df['rs_nasdaq'].pct_change(15)
 
+    # 3. Idiosyncratic return: stock alpha vs market / sector
+    #    ret_Nd_rel_X = stock N-day return minus reference N-day return.
+    #    Decomposes the stock's move into market/sector drift vs stock-specific alpha.
+    #    rs_smh_trend / rs_sp500_trend are 15-day only; these add 5d and 10d windows.
+    df['price_change_10'] = df['adjusted close'].pct_change(10)
+    df['ret_5d_rel_SPY']  = df['price_change_5']  - df['SPY_close'].pct_change(5)
+    df['ret_10d_rel_SPY'] = df['price_change_10'] - df['SPY_close'].pct_change(10)
+
+    if 'SMH_close' in df.columns and df['SMH_close'].notna().sum() > 0:
+        df['ret_5d_rel_SMH']  = df['price_change_5']  - df['SMH_close'].pct_change(5)
+        df['ret_10d_rel_SMH'] = df['price_change_10'] - df['SMH_close'].pct_change(10)
+    else:
+        df['ret_5d_rel_SMH']  = np.nan
+        df['ret_10d_rel_SMH'] = np.nan
+
     # merge all the features together
     print("shape of feature data in a df: "+ str(df.shape))
     return df, num_data_points, display_date_range

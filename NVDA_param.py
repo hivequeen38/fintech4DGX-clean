@@ -45,6 +45,14 @@ AAII_option_vol_ratio = {
         'netIncome',
 
         ##################################
+        # Idiosyncratic return (stock alpha vs market / sector)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+        'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
+        'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
+
+        ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
@@ -174,7 +182,12 @@ AAII_option_vol_ratio = {
         'Real Lower Band',
         'price_change_1',
         'price_change_5',
+        'price_change_10',
         'price_change_15',
+        'ret_5d_rel_SPY',
+        'ret_10d_rel_SPY',
+        'ret_5d_rel_SMH',   # added with relative return block
+        'ret_10d_rel_SMH',   # added with relative return block
     ],
     "window_size": 35,
     "target_size": 15,
@@ -243,6 +256,14 @@ AAII_reference = {
         'earn_in_20',
         'totalRevenue',
         'netIncome',
+
+        ##################################
+        # Idiosyncratic return (stock alpha vs market / sector)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+        'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
+        'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -374,7 +395,12 @@ AAII_reference = {
         'Real Lower Band',
         'price_change_1',
         'price_change_5',
+        'price_change_10',
         'price_change_15',
+        'ret_5d_rel_SPY',
+        'ret_10d_rel_SPY',
+        'ret_5d_rel_SMH',   # added with relative return block
+        'ret_10d_rel_SMH',   # added with relative return block
     ],
     "window_size": 35,
     "target_size": 15,
@@ -443,6 +469,14 @@ reference = {
         'earn_in_20',
         'totalRevenue',
         'netIncome',
+
+        ##################################
+        # Idiosyncratic return (stock alpha vs market / sector)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+        'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
+        'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -564,7 +598,12 @@ reference = {
         'Real Lower Band',
         'price_change_1',
         'price_change_5',
+        'price_change_10',
         'price_change_15',
+        'ret_5d_rel_SPY',
+        'ret_10d_rel_SPY',
+        'ret_5d_rel_SMH',   # added with relative return block
+        'ret_10d_rel_SMH',   # added with relative return block
     ],
     "window_size": 35,
     "target_size": 15,
@@ -636,6 +675,14 @@ mz_reference = {
         'earn_in_20',
         'totalRevenue',
         'netIncome',
+
+        ##################################
+        # Idiosyncratic return (stock alpha vs market / sector)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+        'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
+        'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -756,7 +803,12 @@ mz_reference = {
         'Real Lower Band',
         'price_change_1',
         'price_change_5',
+        'price_change_10',
         'price_change_15',
+        'ret_5d_rel_SPY',
+        'ret_10d_rel_SPY',
+        'ret_5d_rel_SMH',   # added with relative return block
+        'ret_10d_rel_SMH',   # added with relative return block
     ],
     "window_size": 35,
     "target_size": 15,
@@ -826,6 +878,14 @@ AAII_all = {
         'earn_in_20',
         'totalRevenue',
         # 'netIncome',        ## 2nd pass SHAP whacking
+
+        ##################################
+        # Idiosyncratic return (stock alpha vs market / sector)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+        'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
+        'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -955,7 +1015,12 @@ AAII_all = {
         # 'Real Lower Band',  ## 2nd pass SHAP whacking
         'price_change_1',
         'price_change_5',
+        'price_change_10',
         'price_change_15',
+        'ret_5d_rel_SPY',
+        'ret_10d_rel_SPY',
+        'ret_5d_rel_SMH',   # added with relative return block
+        'ret_10d_rel_SMH',   # added with relative return block
     ],
     "window_size": 35,
     "target_size": 15,

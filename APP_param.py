@@ -40,6 +40,12 @@ AAII_option_vol_ratio = {
         
 
         ##################################
+        # Idiosyncratic return (stock alpha vs market)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+
+        ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
@@ -203,6 +209,12 @@ AAII_Min_features = {
         
 
         ##################################
+        # Idiosyncratic return (stock alpha vs market)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+
+        ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
@@ -361,6 +373,12 @@ AAII_reference = {
         'totalRevenue',
         'netIncome',
         
+
+        ##################################
+        # Idiosyncratic return (stock alpha vs market)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -529,6 +547,12 @@ reference = {
         'totalRevenue',
         'netIncome',
         
+
+        ##################################
+        # Idiosyncratic return (stock alpha vs market)
+        ##################################
+        'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
+        'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
