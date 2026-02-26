@@ -98,25 +98,47 @@ def test_earn_in_gates():
     assert row_15["earn_in_20"] == 1
 
 
-# ── Test 3: sentinel 999 when no upcoming earnings ────────────────────────────
+# ── Test 3: sentinel 999 only when eff_sessions is empty ──────────────────────
 
-def test_sentinel_no_upcoming_earnings(capsys):
+def test_sentinel_empty_eff_sessions(capsys):
     """
-    When all effective sessions are in the past relative to the trading dates,
-    dte should be 999 and a warning should be printed.
+    dte=999 should only appear when eff_sessions is completely empty (no historical
+    earnings data to extrapolate from).  A non-empty eff_sessions — even all past
+    dates — should extrapolate via +3-month increments, not return 999.
     """
     td = make_trading_dates("2024-03-01", "2024-03-29")
     df = make_df(td)
 
-    # Only a past earnings date
-    eff = [pd.Timestamp("2024-01-25")]
-    result = compute_dte_dse_features(df, eff, "XTEST")
-
-    assert (result["dte"] == 999).all(), "All rows should have dte=999 with no future earnings"
+    # Empty eff_sessions → no way to extrapolate → 999
+    result_empty = compute_dte_dse_features(df, [], "XTEST")
+    assert (result_empty["dte"] == 999).all(), \
+        "All rows should have dte=999 when eff_sessions is empty"
 
     captured = capsys.readouterr()
     assert "XTEST" in captured.out and "dte=999" in captured.out, \
         "Warning message should mention symbol and dte=999"
+
+
+# ── Test 3b: past-only eff_sessions extrapolates via +3 months ───────────────
+
+def test_past_only_eff_sessions_extrapolates():
+    """
+    When all effective sessions are in the past, dte should be extrapolated as
+    last_known + 3-month increments (not 999).
+    """
+    td = make_trading_dates("2024-03-01", "2024-03-29")
+    df = make_df(td)
+
+    # Only a past earnings date — all trading dates are after it
+    eff = [pd.Timestamp("2024-01-25")]
+    result = compute_dte_dse_features(df, eff, "XTEST")
+
+    # Should NOT be 999 — extrapolated next = 2024-01-25 + 3 months = 2024-04-25
+    assert (result["dte"] != 999).all(), \
+        "dte should not be 999 when eff_sessions has at least one historical date"
+    # Should be positive and reasonable (< 100 trading days / ~5 months out)
+    assert (result["dte"] > 0).all(), "dte should be positive"
+    assert (result["dte"] < 100).all(), "dte should be a reasonable approximation"
 
 
 # ── Test 4: earnings beyond price history uses calendar approximation ─────────

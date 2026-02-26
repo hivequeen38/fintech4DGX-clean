@@ -1593,6 +1593,15 @@ def compute_dte_dse_features(df, eff_sessions, symbol):
                     dte_arr[i] = 999
                 else:
                     dte_arr[i] = max(0, round(diff_days * 252 / 365))
+        elif len(eff) > 0:
+            # No known future earnings date — extrapolate from last known eff_session
+            # by adding 3-calendar-month increments until we land in the future.
+            last_eff = eff[-1]
+            est_nrd = last_eff + pd.DateOffset(months=3)
+            while est_nrd <= d:
+                est_nrd += pd.DateOffset(months=3)
+            diff_days = (est_nrd - d).days
+            dte_arr[i] = max(0, round(diff_days * 252 / 365))
 
         # DSE: most recent effective session <= today
         lj = eff.searchsorted(d, side='right') - 1
@@ -1609,8 +1618,8 @@ def compute_dte_dse_features(df, eff_sessions, symbol):
 
     sentinel_count = int((dte_arr == 999).sum())
     if sentinel_count > 0:
-        print(f"  ⚠️  [{symbol}] {sentinel_count} row(s) have no known upcoming earnings "
-              f"(dte=999). Add 'next_report_date' to {symbol}_param.py to fix.")
+        print(f"  ⚠️  [{symbol}] {sentinel_count} row(s) have dte=999 "
+              f"(no historical earnings data to extrapolate from).")
 
     df['dte']        = dte_arr
     df['dse']        = dse_arr
