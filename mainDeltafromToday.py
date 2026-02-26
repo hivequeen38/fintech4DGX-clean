@@ -355,7 +355,7 @@ def inference(param: dict[str], end_date: str=None, run_date=None, input_comment
     incr_df = incr_df.reset_index(drop=True)
 
     # for first 5 days at 3%, then rest of the 15 days at 5%
-    comment = 'Inference (Fixed)' + ' RD=' + str(run_date) + ' ' + input_comment
+    comment = f'(inf)({param["model_name"]}) RD={run_date}'
     param["threshold"] = 0.03
     inference_first_5_days(param, incr_df, False, comment)
 

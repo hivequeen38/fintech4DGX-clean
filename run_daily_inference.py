@@ -30,29 +30,29 @@ print(f"Running daily inference for {today_date_str}")
 print(f"Cloud upload: {'ON' if upload_to_cloud else 'OFF - results saved locally only'}")
 
 # ── reference runs ────────────────────────────────────────────────────────────
-mainDeltafromToday.inference(CRDO_param.reference, end_date=today_date_str, input_comment='(ref) inference')
-mainDeltafromToday.inference(NVDA_param.reference, end_date=today_date_str, input_comment='(ref) inference')
+mainDeltafromToday.inference(CRDO_param.reference, end_date=today_date_str)
+mainDeltafromToday.inference(NVDA_param.reference, end_date=today_date_str)
 get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
 
-mainDeltafromToday.inference(PLTR_param.reference, end_date=today_date_str, input_comment='(ref) inference')
-mainDeltafromToday.inference(APP_param.reference,  end_date=today_date_str, input_comment='(ref) inference')
-mainDeltafromToday.inference(INOD_param.reference, end_date=today_date_str, input_comment='(ref) inference')
+mainDeltafromToday.inference(PLTR_param.reference, end_date=today_date_str)
+mainDeltafromToday.inference(APP_param.reference,  end_date=today_date_str)
+mainDeltafromToday.inference(INOD_param.reference, end_date=today_date_str)
 
 # ── AAII_option_vol_ratio runs ────────────────────────────────────────────────
-mainDeltafromToday.inference(CRDO_param.AAII_option_vol_ratio, end_date=today_date_str, input_comment='(AAII) inference')
-mainDeltafromToday.inference(NVDA_param.AAII_option_vol_ratio, end_date=today_date_str, input_comment='(AAII) inference')
+mainDeltafromToday.inference(CRDO_param.AAII_option_vol_ratio, end_date=today_date_str)
+mainDeltafromToday.inference(NVDA_param.AAII_option_vol_ratio, end_date=today_date_str)
 get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
 
-mainDeltafromToday.inference(PLTR_param.AAII_option_vol_ratio, end_date=today_date_str, input_comment='(AAII) inference')
-mainDeltafromToday.inference(APP_param.AAII_option_vol_ratio,  end_date=today_date_str, input_comment='(AAII) inference')
-mainDeltafromToday.inference(INOD_param.AAII_option_vol_ratio, end_date=today_date_str, input_comment='(AAII) inference')
+mainDeltafromToday.inference(PLTR_param.AAII_option_vol_ratio, end_date=today_date_str)
+mainDeltafromToday.inference(APP_param.AAII_option_vol_ratio,  end_date=today_date_str)
+mainDeltafromToday.inference(INOD_param.AAII_option_vol_ratio, end_date=today_date_str)
 
 # ── reference_no_shuffle runs ─────────────────────────────────────────────────
-mainDeltafromToday.inference(CRDO_param.reference_no_shuffle, end_date=today_date_str, input_comment='(ref_noshuf) inference')
-mainDeltafromToday.inference(NVDA_param.reference_no_shuffle, end_date=today_date_str, input_comment='(ref_noshuf) inference')
-mainDeltafromToday.inference(PLTR_param.reference_no_shuffle, end_date=today_date_str, input_comment='(ref_noshuf) inference')
-mainDeltafromToday.inference(APP_param.reference_no_shuffle,  end_date=today_date_str, input_comment='(ref_noshuf) inference')
-mainDeltafromToday.inference(INOD_param.reference_no_shuffle, end_date=today_date_str, input_comment='(ref_noshuf) inference')
+mainDeltafromToday.inference(CRDO_param.reference_no_shuffle, end_date=today_date_str)
+mainDeltafromToday.inference(NVDA_param.reference_no_shuffle, end_date=today_date_str)
+mainDeltafromToday.inference(PLTR_param.reference_no_shuffle, end_date=today_date_str)
+mainDeltafromToday.inference(APP_param.reference_no_shuffle,  end_date=today_date_str)
+mainDeltafromToday.inference(INOD_param.reference_no_shuffle, end_date=today_date_str)
 
 get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
 
