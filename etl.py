@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from pandas import DataFrame
 # import sklearn
@@ -22,6 +23,9 @@ def fill_data(df: DataFrame)-> DataFrame:
     # to ensure all data are float in there, need to catch and fix
     # Apply pd.to_numeric to all columns except 'date'
     df[df.columns.difference(['date'])] = df[df.columns.difference(['date'])].apply(pd.to_numeric, errors='coerce')
+
+    # Replace inf/-inf with NaN so ffill/bfill can handle them
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     df.ffill(inplace=True)
     df.bfill(inplace=True)
