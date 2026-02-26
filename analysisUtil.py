@@ -222,7 +222,18 @@ def download_data(config, param, use_global_cache=False):
         df['rs_socl_trend'] = df['rs_socl'].pct_change(5)
         df['rs_xlc'] = df['adjusted close'] / df['XLC_close']
         df['rs_xlc_trend'] = df['rs_xlc'].pct_change(5)
-        
+
+    # 3. Idiosyncratic return: stock alpha vs market / sector
+    #    ret_Nd_rel_X = stock N-day return minus reference N-day return.
+    df['price_change_10'] = df['adjusted close'].pct_change(10)
+    df['ret_5d_rel_SPY']  = df['price_change_5']  - df['SPY_close'].pct_change(5)
+    df['ret_10d_rel_SPY'] = df['price_change_10'] - df['SPY_close'].pct_change(10)
+    if 'SMH_close' in df.columns and df['SMH_close'].notna().sum() > 0:
+        df['ret_5d_rel_SMH']  = df['price_change_5']  - df['SMH_close'].pct_change(5)
+        df['ret_10d_rel_SMH'] = df['price_change_10'] - df['SMH_close'].pct_change(10)
+    else:
+        df['ret_5d_rel_SMH']  = np.nan
+        df['ret_10d_rel_SMH'] = np.nan
 
     # merge all the features together
     df = etl.fill_data(df)

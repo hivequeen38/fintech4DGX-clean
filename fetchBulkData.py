@@ -1246,14 +1246,16 @@ def clean_cp_ratio_file(symbol):
         print(f"Error cleaning file: {e}")
         return None
 
-def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key):
+def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key, backfill_iv=False):
     """
     Get C/P ratios and IV features for dates provided in DataFrame.
     Continues from where it left off if a saved file exists.
 
     IV columns (iv_7d, iv_30d, iv_90d, iv_skew_30d, iv_term_ratio) are computed
     alongside CP ratios from the same HISTORICAL_OPTIONS API call — no extra requests.
-    Existing rows missing IV columns are detected and re-fetched automatically (backfill).
+    Set backfill_iv=True to re-fetch existing rows that are missing iv_30d.
+    The daily training pipeline uses backfill_iv=False (default) to avoid long API waits;
+    use cp_ratio_backfill.py for the full historical IV backfill.
     """
     file_path = f"{symbol}-cp_ratios_sentiment_w_volume.csv"
     IV_COLS = ['iv_7d', 'iv_30d', 'iv_90d', 'iv_skew_30d', 'iv_term_ratio']
@@ -1295,10 +1297,13 @@ def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key):
         remaining_dates = sorted(list(all_dates - processed_dates))
         new_dates_set = set(remaining_dates)
 
-        # Dates in CSV but still missing iv_30d need IV backfill (re-fetch)
-        iv_backfill_dates = existing_df[existing_df['iv_30d'].isna()]['date'].tolist()
-        # Exclude dates that will be fetched fresh anyway
-        iv_backfill_dates = [d for d in iv_backfill_dates if d not in new_dates_set]
+        # Dates in CSV but still missing iv_30d can optionally be re-fetched (backfill).
+        # Normal training uses backfill_iv=False to avoid long API waits.
+        if backfill_iv:
+            iv_backfill_dates = existing_df[existing_df['iv_30d'].isna()]['date'].tolist()
+            iv_backfill_dates = [d for d in iv_backfill_dates if d not in new_dates_set]
+        else:
+            iv_backfill_dates = []
 
         print(f"Found existing file with {len(existing_df)} entries")
         print(f"New dates to fetch: {len(remaining_dates)}, IV backfill dates: {len(iv_backfill_dates)}")
@@ -1567,7 +1572,7 @@ def compute_dte_dse_features(df, eff_sessions, symbol):
     n = len(td)
 
     td_pos = {d: i for i, d in enumerate(td)}
-    eff = pd.DatetimeIndex(pd.to_datetime(list(eff_sessions))).sort_values()
+    eff = pd.DatetimeIndex(pd.to_datetime(list(eff_sessions))).sort_values().dropna()
 
     dte_arr = np.full(n, 999, dtype=float)
     dse_arr = np.full(n, np.nan, dtype=float)
@@ -1583,7 +1588,11 @@ def compute_dte_dse_features(df, eff_sessions, symbol):
                 dte_arr[i] = td_pos[nday] - i
             else:
                 # Earnings beyond price history — approximate via calendar days
-                dte_arr[i] = max(0, round((nday - d).days * 252 / 365))
+                diff_days = (nday - d).days
+                if pd.isna(diff_days):
+                    dte_arr[i] = 999
+                else:
+                    dte_arr[i] = max(0, round(diff_days * 252 / 365))
 
         # DSE: most recent effective session <= today
         lj = eff.searchsorted(d, side='right') - 1
@@ -1592,7 +1601,11 @@ def compute_dte_dse_features(df, eff_sessions, symbol):
             if lday in td_pos:
                 dse_arr[i] = i - td_pos[lday]
             else:
-                dse_arr[i] = max(0, round((d - lday).days * 252 / 365))
+                diff_days = (d - lday).days
+                if pd.isna(diff_days):
+                    pass  # leave dse_arr[i] as nan
+                else:
+                    dse_arr[i] = max(0, round(diff_days * 252 / 365))
 
     sentinel_count = int((dte_arr == 999).sum())
     if sentinel_count > 0:
@@ -2754,7 +2767,6 @@ def fetch_all_data(config, param):
         except Exception as e:
             print(f">  [EPS estimates] WARNING: failed for {symbol}: {e}. Filling features with NaN.")
             # Add NaN columns so selected_columns validation doesn't crash downstream.
-            import numpy as np
             for col in fetch_eps_estimates.DAILY_FEATURE_COLS:
                 df[col] = np.nan
         # ── end EPS estimate features ─────────────────────────────────────────
@@ -2982,6 +2994,11 @@ def fetch_all_data(config, param):
             if os.path.isfile(file_path):
                 # file exist
                 df_cp_ratios = pd.read_csv(file_path)
+
+                # Ensure IV columns exist even if CSV was written before IV support was added
+                for _iv_col in ['iv_7d', 'iv_30d', 'iv_90d', 'iv_skew_30d', 'iv_term_ratio']:
+                    if _iv_col not in df_cp_ratios.columns:
+                        df_cp_ratios[_iv_col] = np.nan
 
                 start_date = param['start_date']
                 df = df[df['date'] >= start_date]   # whack all older dates before the desired start date
