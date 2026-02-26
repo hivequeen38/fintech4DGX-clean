@@ -11,7 +11,7 @@ Prioritized by expected signal value for a 1–3 week horizon.
 |---|---|---|---|
 | 1 | `earnings_is_bmo`, `earnings_is_amc` | Earnings timing | **IMPLEMENTED** 2026-02-25 — computed & stored in TMP.csv; NOT in selected_columns yet (constant for all-AMC universe; activate when BMO stock added) |
 | 2 | `ret_5d_rel_SPY`, `ret_10d_rel_SPY`, `ret_5d_rel_SMH`, `ret_10d_rel_SMH` | Cross-sectional alpha | **IMPLEMENTED** 2026-02-25 |
-| 3+4 | `iv_30d`, `iv_skew_30d`, `iv_term_ratio` | Options IV | **IMPLEMENTED** 2026-02-25 — extracted from existing AV HISTORICAL_OPTIONS fetch in same API call; backfill auto-runs on next training pass |
+| 3+4 | `iv_30d`, `iv_skew_30d`, `iv_term_ratio` | Options IV | **IMPLEMENTED** 2026-02-25 — extracted from existing AV HISTORICAL_OPTIONS fetch in same API call; **⚠️ IV BACKFILL PENDING** — run `cp_ratio_backfill.py` (~19h total) before IV features are usable in training |
 | 5 | `short_interest_pct_float` (or `days_to_cover`) | Short interest | Backlog — low cadence limits daily utility |
 
 **Note:** `is_earnings_day`, `is_post_earnings_day_1/2/3` were removed from top-5 — largely redundant
@@ -320,7 +320,7 @@ Previously noted — now merged into categories above or retained here:
 | Feature | Source | Notes |
 |---|---|---|
 | `insider_buy_sell_ratio` | SEC Form 4 / OpenInsider | Strong signal but complex to fetch reliably; see Corporate Actions §7 |
-| `news_sentiment_score` | AV NEWS_SENTIMENT (already fetched) | Currently not in selected_columns for most profiles; low-hanging fruit |
+| `news_sentiment_score` | AV NEWS_SENTIMENT (already fetched) | **NOT low-hanging fruit** — `fetchMultiSentiment.py` fetches articles for HTML reports only; NOT merged into TMP.csv. Requires: (1) daily aggregation of `ticker_sentiment_score` weighted by `relevance_score`, (2) historical backfill per symbol back to start_date (multi-hour API job), (3) merge into TMP.csv. Coverage risk: smaller names (CRDO, INOD) may have sparse daily coverage → all-NaN rows. Recommended approach: backfill NVDA only first, validate signal on `reference_no_shuffle` before rolling out to all 5 stocks. Medium-low priority — do after IV backfill and model training improvements (Focal Loss, LR scheduler). |
 
 ---
 
