@@ -19,7 +19,7 @@ import TSLA_param
 
 # ['CRDO', 'NVDA', 'PLTR', 'APP', 'INOD']
 today_date_str = datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d")
-today_date_str = '2026-02-25'  # manual debug override (commented out)
+# today_date_str = '2026-02-25'  # manual debug override (commented out)
 
 response = input("Upload results to Google Cloud? (Y/N): ").strip().upper()
 upload_to_cloud = response == 'Y'
