@@ -30,6 +30,15 @@ def fill_data(df: DataFrame)-> DataFrame:
     df.ffill(inplace=True)
     df.bfill(inplace=True)
 
+    # Final safety: fill any remaining NaN (e.g. all-NaN columns with 0% data coverage)
+    # with 0 so the scaler never receives NaN. Zero-variance columns are harmless to training.
+    remaining_nan = df.isnull().sum().sum()
+    if remaining_nan > 0:
+        all_nan_cols = [c for c in df.columns if df[c].isna().all()]
+        if all_nan_cols:
+            print(f"WARNING: {len(all_nan_cols)} all-NaN columns filled with 0: {all_nan_cols}")
+        df.fillna(0, inplace=True)
+
     logging.debug("\nDataFrame after handling missing values:\n"+ str(df.head))
     # df.to_csv('TMP_etl.csv', index=False) # we want to save the date index
     return df
