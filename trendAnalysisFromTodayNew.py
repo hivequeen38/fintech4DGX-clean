@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 from itertools import cycle
 import seaborn as sns
 import torch.nn as nn
+import torch.nn.functional as F
 import json
 import time
 from datetime import datetime
@@ -38,6 +39,33 @@ import processPrediction
 import analysisUtil
 
 print("All libraries loaded for "+ __file__)
+
+
+class FocalLoss(nn.Module):
+    """Focal Loss for imbalanced multi-class classification.
+
+    gamma=2.0: down-weights easy correct predictions (neutral class), forcing
+    the model to focus training effort on hard minority examples (UP/DN).
+    label_smoothing: prevents overconfidence on the dominant neutral class by
+    softening the target distribution.
+    """
+    def __init__(self, weight=None, gamma=2.0, label_smoothing=0.1):
+        super().__init__()
+        self.weight = weight
+        self.gamma = gamma
+        self.label_smoothing = label_smoothing
+
+    def forward(self, input, target):
+        ce_loss = F.cross_entropy(
+            input, target,
+            weight=self.weight,
+            label_smoothing=self.label_smoothing,
+            reduction='none'
+        )
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma) * ce_loss
+        return focal_loss.mean()
+
 
 class StockTransformer(nn.Module):
     def __init__(self, input_dim, num_classes, num_heads, num_layers, dropout_rate):
@@ -836,7 +864,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     if num_classes == 1:
         criterion = nn.BCELoss()
     else:
-        criterion = nn.CrossEntropyLoss(weight=class_weights_tensor)
+        criterion = FocalLoss(weight=class_weights_tensor, gamma=2.0, label_smoothing=0.1)
 
     # Define optimizer with L2 regularization (weight decay)
     optimizer = optim.Adam(
@@ -850,7 +878,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
 
     # Training Loop:
     num_epochs = param['num_epochs']
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     # L1 regularization NEW
     l1_lambda = param["l1_lambda"]
     

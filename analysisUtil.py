@@ -235,6 +235,19 @@ def download_data(config, param, use_global_cache=False):
         df['ret_5d_rel_SMH']  = np.nan
         df['ret_10d_rel_SMH'] = np.nan
 
+    # 4. Realized volatility features (annualized, in % to match VIXCLS units)
+    df['rv_10d'] = df['daily_return'].rolling(10).std() * np.sqrt(252) * 100
+    df['rv_20d'] = df['daily_return'].rolling(20).std() * np.sqrt(252) * 100
+    # Short/medium vol ratio: >1 means recent vol spike vs medium-term baseline
+    rv_5d_raw  = df['daily_return'].rolling(5).std()
+    rv_20d_raw = df['daily_return'].rolling(20).std()
+    df['rv_term_ratio'] = rv_5d_raw / (rv_20d_raw + 1e-10)
+    # Market IV (VIX) vs stock realized vol: <1 means stock more volatile than market fears
+    if 'VIXCLS' in df.columns and df['VIXCLS'].notna().sum() > 0:
+        df['vix_rv_ratio'] = df['VIXCLS'] / (df['rv_20d'] + 1e-4)
+    else:
+        df['vix_rv_ratio'] = np.nan
+
     # merge all the features together
     df = etl.fill_data(df)
     
@@ -508,22 +521,26 @@ def train_with_trend_based_stopping(model, train_loader, val_loader, num_epochs,
             scaler.update()
 
             total_loss += loss.item()
-        
+
         avg_loss = total_loss / len(train_loader)
-    
+
+        # Step the LR scheduler once per epoch
+        if scheduler is not None:
+            scheduler.step()
+
         # Check if we should stop
         stopping(avg_loss, model)
-        
+
         if stopping.early_stop:
             print(f"Stopping at epoch {epoch+1} due to increasing trend")
             # Load the best model we saw
             model.load_state_dict(stopping.best_model)
             break
-        
+
         # Print epoch summary
         if (epoch + 1) % 10 == 0:
             print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}')
-    
+
     return model
 
 def train_with_trend_based_stopping_OLDNEW(model, train_loader, val_loader, num_epochs, optimizer, 

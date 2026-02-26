@@ -46,6 +46,14 @@ AAII_option_vol_ratio = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
 
         ##################################
+        # Realized volatility features
+        ##################################
+        'rv_10d',         # 10-day annualized realized vol (%)
+        'rv_20d',         # 20-day annualized realized vol (%)
+        'rv_term_ratio',  # rv_5d/rv_20d: short/medium vol ratio (>1 = recent spike)
+        'vix_rv_ratio',   # VIXCLS/rv_20d: market fear vs stock realized vol
+
+        ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
@@ -221,6 +229,14 @@ AAII_Min_features = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
 
         ##################################
+        # Realized volatility features
+        ##################################
+        'rv_10d',         # 10-day annualized realized vol (%)
+        'rv_20d',         # 20-day annualized realized vol (%)
+        'rv_term_ratio',  # rv_5d/rv_20d: short/medium vol ratio (>1 = recent spike)
+        'vix_rv_ratio',   # VIXCLS/rv_20d: market fear vs stock realized vol
+
+        ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
@@ -385,6 +401,14 @@ AAII_reference = {
         ##################################
         'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+
+        ##################################
+        # Realized volatility features
+        ##################################
+        'rv_10d',         # 10-day annualized realized vol (%)
+        'rv_20d',         # 20-day annualized realized vol (%)
+        'rv_term_ratio',  # rv_5d/rv_20d: short/medium vol ratio (>1 = recent spike)
+        'vix_rv_ratio',   # VIXCLS/rv_20d: market fear vs stock realized vol
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -559,6 +583,14 @@ reference = {
         ##################################
         'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+
+        ##################################
+        # Realized volatility features
+        ##################################
+        'rv_10d',         # 10-day annualized realized vol (%)
+        'rv_20d',         # 20-day annualized realized vol (%)
+        'rv_term_ratio',  # rv_5d/rv_20d: short/medium vol ratio (>1 = recent spike)
+        'vix_rv_ratio',   # VIXCLS/rv_20d: market fear vs stock realized vol
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)

@@ -52,6 +52,14 @@ AAII_option_vol_ratio = {
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
+        # Realized volatility features
+        ##################################
+        'rv_10d',         # 10-day annualized realized vol (%)
+        'rv_20d',         # 20-day annualized realized vol (%)
+        'rv_term_ratio',  # rv_5d/rv_20d: short/medium vol ratio (>1 = recent spike)
+        'vix_rv_ratio',   # VIXCLS/rv_20d: market fear vs stock realized vol
+
+        ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
@@ -193,6 +201,10 @@ AAII_option_vol_ratio = {
         'ret_10d_rel_SPY',
         'ret_5d_rel_SMH',   # added with relative return block
         'ret_10d_rel_SMH',  # added with relative return block
+        'rv_10d',
+        'rv_20d',
+        'rv_term_ratio',
+        'vix_rv_ratio',
         # 'iv_30d',        # PENDING BACKFILL
         # 'iv_skew_30d',   # PENDING BACKFILL
         # 'iv_term_ratio', # PENDING BACKFILL
@@ -268,6 +280,14 @@ AAII_reference = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
         'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
+
+        ##################################
+        # Realized volatility features
+        ##################################
+        'rv_10d',         # 10-day annualized realized vol (%)
+        'rv_20d',         # 20-day annualized realized vol (%)
+        'rv_term_ratio',  # rv_5d/rv_20d: short/medium vol ratio (>1 = recent spike)
+        'vix_rv_ratio',   # VIXCLS/rv_20d: market fear vs stock realized vol
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -404,6 +424,10 @@ AAII_reference = {
         'ret_10d_rel_SPY',
         'ret_5d_rel_SMH',   # added with relative return block
         'ret_10d_rel_SMH',   # added with relative return block
+        'rv_10d',
+        'rv_20d',
+        'rv_term_ratio',
+        'vix_rv_ratio',
     ],
     "window_size": 35,
     "target_size": 15,
@@ -481,6 +505,14 @@ reference = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
         'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
+
+        ##################################
+        # Realized volatility features
+        ##################################
+        'rv_10d',         # 10-day annualized realized vol (%)
+        'rv_20d',         # 20-day annualized realized vol (%)
+        'rv_term_ratio',  # rv_5d/rv_20d: short/medium vol ratio (>1 = recent spike)
+        'vix_rv_ratio',   # VIXCLS/rv_20d: market fear vs stock realized vol
 
         ##################################
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
@@ -608,6 +640,10 @@ reference = {
         'ret_10d_rel_SPY',
         'ret_5d_rel_SMH',   # added with relative return block
         'ret_10d_rel_SMH',   # added with relative return block
+        'rv_10d',
+        'rv_20d',
+        'rv_term_ratio',
+        'vix_rv_ratio',
     ],
     "window_size": 35,
     "target_size": 15,
