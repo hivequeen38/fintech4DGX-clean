@@ -330,43 +330,44 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
 
 #########################################
 # MAIN LOOP enters here for training
-def inference(param: dict[str], run_date=None, input_comment=None, load_cache=True):
+def inference(param: dict[str], end_date: str=None, run_date=None, input_comment=None, load_cache=True):
     logging.basicConfig(level=logging.INFO)
 
+    eastern = pytz.timezone('US/Eastern')
     if (run_date is None):
-        eastern = pytz.timezone('US/Eastern')
-    run_date = datetime.now(eastern).strftime('%Y-%m-%d %H:%M')
+        run_date = datetime.now(eastern).strftime('%Y-%m-%d %H:%M')
+
+    if end_date is None:
+        end_date = datetime.now(eastern).strftime('%Y-%m-%d')
+    param['end_date'] = end_date
 
     if (input_comment is None):
         input_comment = ''
 
-    # load today's data
-    # trendAnalysisBlackBox.load_data_to_cache(trendConfig.config, param)
+    # load today's data (full re-fetch, same as training — skips training loop)
     if load_cache == True:
         trendAnalysisFromTodayNew.load_data_to_cache(trendConfig.config, param)
-    
+
     #  DO FIXED SEED
     #
     input_col = ['date', 'close', 'p1', 'p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15', 'comment']
     incr_df = pd.DataFrame(columns=input_col)
     incr_df = incr_df.reset_index(drop=True)
-    
+
     # for first 5 days at 3%, then rest of the 15 days at 5%
-    comment = 'Refactored make_prediction_test(Fixed)' + ' Rundate= ' + str(run_date) + ' ' + input_comment
+    comment = 'Inference (Fixed)' + ' RD=' + str(run_date) + ' ' + input_comment
     param["threshold"] = 0.03
     inference_first_5_days(param, incr_df, False, comment)
 
     param["threshold"] = 0.05
     inference_last_10_days(param, incr_df, False, comment)
 
-
-    # at this point there are 15x individual result files that's been updated. 
-    # grab the current date and the closing price from the first one 
+    # at this point there are 15x individual result files that's been updated.
+    # grab the current date and the closing price from the first one
     # NVDA_1d_predictions_test.csv
     #
-
-    dateStr, closing_price, last_cp_vol = fetchDateAndClosing(param)
-    processDeltaFromTodayResults(param["symbol"], incr_df, dateStr, closing_price, comment, last_cp_vol, param)
+    dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(param)
+    processDeltaFromTodayResults(param["symbol"], incr_df, dateStr, closing_price, comment, last_cp_vol, param, last_vol_ratio)
 
     # # RANDOM SEED
     # #
