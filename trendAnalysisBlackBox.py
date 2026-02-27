@@ -906,27 +906,14 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     # tiume stamp, stock symbol, the input param, and then output
     row = [date, param, result_dictionary]
 
-    # File path
-    json_file_path = symbol+ '_trend.json'
+    # Append one record per line to the JSONL file (no full rewrite needed)
+    jsonl_file_path = symbol + '_trend.jsonl'
+    with open(jsonl_file_path, 'a') as file:
+        file.write(json.dumps(row) + '\n')
 
-    # Read existing data from the file or start with an empty list
-    if os.path.exists(json_file_path):
-        with open(json_file_path, 'r') as file:
-            data = json.load(file)
-    else:
-        data = []
-
-    # Append the new row to the data
-    data.append(row)
-
-    # Write the updated data back to the file
-    with open(json_file_path, 'w') as file:
-        json.dump(data, file, indent=4)
-
-    
-    # Load your JSON data
-    # Replace 'your_json_string' with your actual JSON string, 
-    # or load from a file using json.load(open('filename.json'))
+    # Read full JSONL history to rebuild the CSV (read-only, no rewrite)
+    with open(jsonl_file_path, 'r') as file:
+        data = [json.loads(line) for line in file if line.strip()]
 
     # Process each record in JSON data
     processed_data = []

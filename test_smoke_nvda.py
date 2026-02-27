@@ -25,7 +25,7 @@ TARGET_SIZE = 1      # Only run 1-day model to keep the smoke test fast
 MODEL_NAME = NVDA_param.reference['model_name']
 SCALER_FILE = f"{SYMBOL}_{MODEL_NAME}_scaler.joblib"
 MODEL_FILE = f"model/model_{SYMBOL}_{MODEL_NAME}_fixed_noTimesplit_{TARGET_SIZE}.pth"
-TREND_JSON = f"{SYMBOL}_trend.json"
+TREND_JSON = f"{SYMBOL}_trend.jsonl"
 
 
 @pytest.fixture(scope='module')
@@ -83,7 +83,7 @@ def test_trend_json_has_valid_metrics(run_nvda_target1):
     """
     assert os.path.exists(TREND_JSON), f"{TREND_JSON} not found"
     with open(TREND_JSON) as f:
-        data = json.load(f)
+        data = [json.loads(line) for line in f if line.strip()]
 
     # Find the most recent entry matching this run's model_name and target_size
     matches = [

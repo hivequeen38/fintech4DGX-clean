@@ -122,45 +122,43 @@ If a class is absent from the test set, sklearn's `classification_report` emits 
 
 ## MEDIUM SEVERITY ISSUES
 
-### 16. Silent date mismatch: prediction labeled with script run-date, not data date
+### ~~16. Silent date mismatch: prediction labeled with script run-date, not data date~~ — NOT AN ISSUE (verified 2026-02-27)
 **File:** `trendAnalysisFromTodayNew.py` lines 411, 588
-Prediction timestamp uses `currentDateTime` (wall clock), but if the data ends on a market holiday or weekend, the prediction date in the results file will be wrong.
-**Fix:** Extract the actual max date from the data and use that as the prediction date. Warn if it differs from wall clock by more than 3 days.
+The two buggy functions (`make_prediciton`, `make_prediciton_test_suspect`) are dead code — never called. The active path `make_prediciton_test` (lines 658, 1196, 1274) correctly uses `param['end_date']` for the data date stamp. The `RD=` in the comment is set from `datetime.now()` in `mainDeltafromToday.py` (lines 265, 358) which is correct — it should reflect actual run time.
 
 ---
 
-### 17. Batch size can exceed dataset size in small splits
+### ~~17. Batch size can exceed dataset size in small splits~~ — FIXED 2026-02-27
 **File:** `trendAnalysisFromTodayNew.py` lines 758-761
 With `batch_size=128`, very small stocks or narrow date ranges could produce validation/test sets smaller than one batch. PyTorch handles this but BatchNorm layers (if added later) would break.
-**Fix:** Assert each split has `>= batch_size` samples, or set `drop_last=False` and document it.
+**Fix:** Added a WARNING log if any split has fewer rows than batch_size. Set `drop_last=False` explicitly on all loaders (documents the intent). Also set `shuffle=False` on val/test loaders — they were incorrectly inheriting `param['shuffle']`.
 
 ---
 
-### 18. Reproducibility: CUDA determinism not verified
+### ~~18. Reproducibility: CUDA determinism not verified~~ — DOCUMENTED / BY DESIGN (2026-02-27)
 **File:** `trendAnalysisFromTodayNew.py` lines 656-670
-Seeds are set but `torch.use_deterministic_algorithms(True)` is not called. On GB10 (Blackwell) or any CUDA device, matrix ops remain non-deterministic.
-**Fix:** Add `torch.use_deterministic_algorithms(True)` or document that results are non-deterministic across runs.
+Seeds are set but `torch.use_deterministic_algorithms(True)` is not called. On GB10 (Blackwell) or any CUDA device, attention and scatter/gather ops remain non-deterministic.
+**Decision:** Not enforced — `torch.use_deterministic_algorithms(True)` can raise RuntimeError on ops with no deterministic CUDA implementation (e.g. attention patterns). The `turn_random_on=True` path already expects randomness; the fixed path gets approximately reproducible results which is sufficient for this use case. `cudnn.deterministic=True` and `cudnn.benchmark=False` are set. Non-determinism across GPU runs is accepted and expected.
 
 ---
 
-### 19. Positional encoding buffer device placement (PyTorch version dependency)
-**File:** `trendAnalysisFromTodayNew.py` line 131
-`self.register_buffer('pe', pe)` is correct in PyTorch ≥1.9 (buffer moves with `model.to(device)`), but this dependency isn't documented. On older installs it silently stays on CPU.
-**Fix:** Document minimum PyTorch version or explicitly move PE after model.to(device).
+### ~~19. Positional encoding buffer device placement (PyTorch version dependency)~~ — NOT AN ISSUE (verified 2026-02-27)
+**File:** `trendAnalysisFromTodayNew.py` line 159
+`self.register_buffer('pe', pe)` correctly moves the PE tensor with `model.to(device)` on PyTorch ≥1.9. Installed version is PyTorch 2.5.0 (NVIDIA build) — well past that threshold. Not an issue.
 
 ---
 
-### 20. Hyperparameters have no validation; invalid values accepted silently
+### ~~20. Hyperparameters have no validation; invalid values accepted silently~~ — DEFERRED / LOW RISK (2026-02-27)
 **File:** All `*_param.py` files
 `dropout_rate=1.5` or `head_count=7` would be accepted and cause a downstream failure far from where the value was set.
-**Fix:** Add a `validate_param()` function called at the start of training that checks ranges for all numeric hyperparameters.
+**Decision:** Param files are edited infrequently by a small team. PyTorch will raise an error (albeit not at startup) if values are grossly invalid. Risk is low. Deferred until param files become more actively modified or a new stock is onboarded.
 
 ---
 
-### 21. Performance: JSON round-trip when appending results
-**File:** `trendAnalysisFromTodayNew.py` lines 1054-1071
-Each training run reads the full JSON results file, appends one record, and rewrites it. For 2000+ records this is slow and fragile (file corruption on kill signal).
-**Fix:** Append directly to a CSV file; keep JSON only as the final rendering step.
+### ~~21. Performance: JSON round-trip when appending results~~ — FIXED 2026-02-27
+**File:** `trendAnalysisFromTodayNew.py`, `trendAnalysisBlackBox.py`, `merge_trends.py`, `test_smoke_nvda.py`
+Each training run was reading the full indented JSON (~8MB), appending one record, and rewriting the whole file. Files were already at 2000 records (8MB) and growing.
+**Fix:** Migrated all `*_trend.json` files to `*_trend.jsonl` (JSON Lines — one compact record per line). Write path now uses `open('a')` + single-line append — no read-back, no full rewrite, no corruption risk on kill. Read path for CSV rebuild reads all lines once per run. File size halved (~4MB). All 4 files updated; existing data migrated via `migrate_json_to_jsonl.py`; originals backed up as `*.json.bak`.
 
 ---
 
@@ -228,12 +226,12 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 13 | ~~HIGH~~ FIXED | trendAnalysis:380 | Error | No existence check before loading scaler file |
 | 14 | ~~HIGH~~ FIXED | trendAnalysis:397,985 | ML | Softmax applied inconsistently in inference vs. train |
 | 15 | ~~HIGH~~ FIXED | trendAnalysis:889 | ML | NaN metrics written to results file silently |
-| 16 | MEDIUM | trendAnalysis:411 | Logic | Prediction timestamp from wall clock, not data max date |
-| 17 | MEDIUM | trendAnalysis:758 | ML | Batch size may exceed split size in edge cases |
-| 18 | MEDIUM | trendAnalysis:656 | ML | CUDA determinism not enforced |
-| 19 | MEDIUM | trendAnalysis:131 | PyTorch | PE buffer device placement undocumented |
-| 20 | MEDIUM | *_param.py | Config | No hyperparameter validation at startup |
-| 21 | MEDIUM | trendAnalysis:1054 | Perf | JSON round-trip on every training run |
+| 16 | ~~MEDIUM~~ NOT AN ISSUE | trendAnalysis:411 | Logic | Dead code — active path already uses param['end_date']; RD= correctly uses run time |
+| 17 | ~~MEDIUM~~ FIXED | trendAnalysis:831 | ML | Batch size may exceed split size — warning log + drop_last=False + val/test shuffle=False |
+| 18 | ~~MEDIUM~~ BY DESIGN | trendAnalysis:656 | ML | CUDA non-determinism accepted — cudnn.deterministic set; use_deterministic_algorithms skipped intentionally |
+| 19 | ~~MEDIUM~~ NOT AN ISSUE | trendAnalysis:159 | PyTorch | PE buffer moves correctly with model.to(device) on PyTorch 2.5.0 |
+| 20 | ~~MEDIUM~~ DEFERRED | *_param.py | Config | No hyperparameter validation — low risk, deferred until param files are more actively modified |
+| 21 | ~~MEDIUM~~ FIXED | trendAnalysis:1137 | Perf | Migrated to JSONL append — no full rewrite, no corruption risk, file size halved |
 | 22 | MEDIUM | get_historical_html:399 | Perf | iterrows() on large table |
 | 23 | LOW | trendAnalysis:27 | Code | Duplicate import |
 | 24 | LOW | trendAnalysis | Code | Typos: make_prediciton, advise, dateshould |

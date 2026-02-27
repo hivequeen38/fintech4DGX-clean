@@ -1,17 +1,20 @@
 """
 merge_trends.py
 
-Merges historical *_trend.json and *_trend.csv files from a Mac machine
+Merges historical *_trend.jsonl and *_trend.csv files from a Mac machine
 into the DGX machine's existing files.
 
 Usage:
     1. Place Mac's trend files in ./mac_trends/ directory
     2. Run: python3 merge_trends.py
-    3. Merged files are written back to /workspace/*_trend.json and *_trend.csv
+    3. Merged files are written back to /workspace/*_trend.jsonl and *_trend.csv
     4. Then re-run upload to regenerate HTMLs with full history
 
 The merge deduplicates by run_time timestamp, keeping all unique entries
 from both machines, sorted chronologically.
+
+NOTE: Mac machine must also be migrated to .jsonl format before merging.
+Run migrate_json_to_jsonl.py on the Mac side first.
 """
 
 import json
@@ -23,22 +26,26 @@ MAC_DIR = './mac_trends'
 DGX_DIR = '.'
 
 
-def merge_json(stock: str):
-    dgx_path = os.path.join(DGX_DIR, f'{stock}_trend.json')
-    mac_path = os.path.join(MAC_DIR, f'{stock}_trend.json')
+def _load_jsonl(path: str) -> list:
+    """Load all records from a .jsonl file (one JSON object per line)."""
+    with open(path, 'r') as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def merge_jsonl(stock: str):
+    dgx_path = os.path.join(DGX_DIR, f'{stock}_trend.jsonl')
+    mac_path = os.path.join(MAC_DIR, f'{stock}_trend.jsonl')
 
     if not os.path.isfile(mac_path):
-        print(f'  [{stock}] No Mac JSON found at {mac_path}, skipping.')
+        print(f'  [{stock}] No Mac JSONL found at {mac_path}, skipping.')
         return
 
-    print(f'  [{stock}] Loading DGX JSON...', end=' ')
-    with open(dgx_path) as f:
-        dgx_data = json.load(f)
+    print(f'  [{stock}] Loading DGX JSONL...', end=' ')
+    dgx_data = _load_jsonl(dgx_path)
     print(f'{len(dgx_data)} records')
 
-    print(f'  [{stock}] Loading Mac JSON...', end=' ')
-    with open(mac_path) as f:
-        mac_data = json.load(f)
+    print(f'  [{stock}] Loading Mac JSONL...', end=' ')
+    mac_data = _load_jsonl(mac_path)
     print(f'{len(mac_data)} records')
 
     # Deduplicate by run_time (first element of each record)
@@ -53,18 +60,18 @@ def merge_json(stock: str):
           f'(+{len(merged) - len(dgx_data)} new from Mac)')
 
     with open(dgx_path, 'w') as f:
-        json.dump(merged, f)
+        for record in merged:
+            f.write(json.dumps(record) + '\n')
     print(f'  [{stock}] Written to {dgx_path}')
     return merged
 
 
-def rebuild_csv_from_json(stock: str):
-    """Regenerate the *_trend.csv from the merged *_trend.json."""
-    json_path = os.path.join(DGX_DIR, f'{stock}_trend.json')
+def rebuild_csv_from_jsonl(stock: str):
+    """Regenerate the *_trend.csv from the merged *_trend.jsonl."""
+    jsonl_path = os.path.join(DGX_DIR, f'{stock}_trend.jsonl')
     csv_path = os.path.join(DGX_DIR, f'{stock}_trend.csv')
 
-    with open(json_path) as f:
-        data = json.load(f)
+    data = _load_jsonl(jsonl_path)
 
     rows = []
     for record in data:
@@ -84,16 +91,16 @@ def rebuild_csv_from_json(stock: str):
 def main():
     if not os.path.isdir(MAC_DIR):
         print(f'ERROR: Mac trends directory not found: {MAC_DIR}')
-        print('Create it and place the Mac *_trend.json files inside.')
+        print('Create it and place the Mac *_trend.jsonl files inside.')
         return
 
     print(f'=== Merging trend files from {MAC_DIR} into {DGX_DIR} ===\n')
 
     for stock in STOCKS:
         print(f'--- {stock} ---')
-        merged = merge_json(stock)
+        merged = merge_jsonl(stock)
         if merged:
-            rebuild_csv_from_json(stock)
+            rebuild_csv_from_jsonl(stock)
         print()
 
     print('=== Done! ===')

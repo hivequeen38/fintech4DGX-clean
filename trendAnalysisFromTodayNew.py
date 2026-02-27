@@ -829,9 +829,12 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
 
     # Creating DataLoaders
     batch_size = param['batch_size']
-    train_loader = DataLoader(train_data, shuffle=param['shuffle'], batch_size=batch_size)
-    val_loader = DataLoader(val_data, shuffle=param['shuffle'], batch_size=batch_size)
-    test_loader = DataLoader(test_data, shuffle=param['shuffle'], batch_size=batch_size)
+    for split_name, split_df in [('train', train_df), ('val', val_df), ('test', test_df)]:
+        if len(split_df) < batch_size:
+            print(f'WARNING: {param["symbol"]} {param["model_name"]} — {split_name} split has {len(split_df)} rows < batch_size {batch_size}')
+    train_loader = DataLoader(train_data, shuffle=param['shuffle'], batch_size=batch_size, drop_last=False)
+    val_loader   = DataLoader(val_data,   shuffle=False,            batch_size=batch_size, drop_last=False)
+    test_loader  = DataLoader(test_data,  shuffle=False,            batch_size=batch_size, drop_last=False)
 
     # Define Your Transformer Model: Use PyTorch’s Transformer model or define your own.
     # Num heads in this chatGPT example = 2, in the datascitribe article it is 4, can test to find out
@@ -1108,7 +1111,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     if nan_in_val or nan_in_test:
         print(f"WARNING: NaN metrics detected — one or more classes absent from val/test set.")
         print(f"  val  F1={f1}  test F1={test_f1}")
-        print(f"  Result NOT saved to {symbol}_trend.json to avoid corrupt history.")
+        print(f"  Result NOT saved to {symbol}_trend.jsonl to avoid corrupt history.")
     else:
         result_dictionary = {
             'Validation Loss': val_loss,
@@ -1130,30 +1133,15 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
         # tiume stamp, stock symbol, the input param, and then output
         row = [date, param, result_dictionary]
 
-        # File path
-        json_file_path = symbol+ '_trend.json'
+        # Append one record per line to the JSONL file (no full rewrite needed)
+        jsonl_file_path = symbol + '_trend.jsonl'
+        with open(jsonl_file_path, 'a') as file:
+            file.write(json.dumps(row) + '\n')
 
-        # Read existing data from the file or start with an empty list
-        if os.path.exists(json_file_path):
-            with open(json_file_path, 'r') as file:
-                data = json.load(file)
-        else:
-            data = []
-
-        # Append the new row to the data
-        data.append(row)
-
-        # Limit the data to the last 2000 entries
-        data = data[-2000:]
-
-        # Write the updated data back to the file
-        with open(json_file_path, 'w') as file:
-            json.dump(data, file, indent=4)
-
-    
-    # Load your JSON data
-    # Replace 'your_json_string' with your actual JSON string, 
-    # or load from a file using json.load(open('filename.json'))
+    # Read full JSONL history to rebuild the CSV (read-only, no rewrite)
+    jsonl_file_path = symbol + '_trend.jsonl'
+    with open(jsonl_file_path, 'r') as file:
+        data = [json.loads(line) for line in file if line.strip()]
 
     # Process each record in JSON data
     processed_data = []
