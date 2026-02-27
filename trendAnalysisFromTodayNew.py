@@ -185,19 +185,116 @@ def build_model(param: dict, input_dim: int, num_classes: int = 3) -> nn.Module:
             dropout_rate=param['dropout_rate'],
             embedded_dim=param['embedded_dim'],
         )
+    elif model_type == 'multi_horizon_transformer':
+        return MultiHorizonTransformer(
+            input_dim=input_dim,
+            num_classes=num_classes,
+            num_heads=param['headcount'],
+            num_layers=param['num_layers'],
+            dropout_rate=param['dropout_rate'],
+            embedded_dim=param['embedded_dim'],
+            num_horizons=param.get('num_horizons', 15),
+        )
     # elif model_type == 'lstm':
-    #     return LSTMModel(
-    #         input_dim=input_dim,
-    #         num_classes=num_classes,
-    #         hidden_size=param['hidden_size'],
-    #         num_layers=param['num_layers'],
-    #         dropout_rate=param['dropout_rate'],
-    #     )
+    #     return LSTMModel(...)
     else:
         raise ValueError(
             f"Unknown model_type: '{model_type}'. "
-            f"Supported types: ['transformer']"
+            f"Supported types: ['transformer', 'multi_horizon_transformer']"
         )
+
+
+CLASS_LABELS = {0: '__', 1: 'UP', 2: 'DN'}  # 0=flat, 1=up, 2=down — DO NOT CHANGE
+
+
+class MultiHorizonHead(nn.Module):
+    """Architecture-agnostic multi-horizon classification head.
+
+    Input:  (batch, d_model)         — pooled encoder representation.
+    Output: (batch, num_horizons, 3) — logits for all horizons at once.
+
+    Reusable across encoders (Transformer, LSTM, etc.) via composition.
+    """
+    def __init__(self, d_model: int, num_horizons: int = 15, num_classes: int = 3):
+        super().__init__()
+        self.num_horizons = num_horizons
+        self.num_classes = num_classes
+        self.fc = nn.Linear(d_model, num_horizons * num_classes)
+        nn.init.xavier_uniform_(self.fc.weight)
+        if self.fc.bias is not None:
+            nn.init.constant_(self.fc.bias, 0)
+
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        # z: (batch, d_model)
+        return self.fc(z).view(-1, self.num_horizons, self.num_classes)
+
+
+class MultiHorizonTransformer(nn.Module):
+    """Transformer encoder + multi-horizon head.
+
+    Predicts all 15 horizons in one forward pass.
+    Uses last-token pooling: z = encoder_output[:, -1, :].
+    Class encoding: 0=flat, 1=UP, 2=DOWN (CLASS_LABELS).
+    Output shape: (batch, num_horizons, num_classes).
+    """
+    def __init__(self, input_dim: int, num_classes: int, num_heads: int,
+                 num_layers: int, dropout_rate: float, embedded_dim: int,
+                 num_horizons: int = 15):
+        super().__init__()
+        self.embedding_dim = embedded_dim
+        self.input_projection = nn.Linear(input_dim, embedded_dim)
+        self.positional_encoding = PositionalEncoding(embedded_dim, dropout_rate)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embedded_dim,
+            nhead=num_heads,
+            dropout=dropout_rate,
+            batch_first=True,
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.head = MultiHorizonHead(embedded_dim, num_horizons=num_horizons, num_classes=num_classes)
+
+    def forward(self, src: torch.Tensor) -> torch.Tensor:
+        # src: (batch, D) or (batch, L, D)
+        if src.dim() == 2:
+            src = src.unsqueeze(1)          # (batch, 1, D)
+        x = self.input_projection(src)      # (batch, L, d_model)
+        x = self.positional_encoding(x)     # (batch, L, d_model)
+        x = self.transformer_encoder(x)     # (batch, L, d_model)
+        x = self.dropout(x)
+        z = x[:, -1, :]                     # last-token pooling: (batch, d_model)
+        return self.head(z)                 # (batch, num_horizons, num_classes)
+
+
+def build_multi_horizon_labels(df: DataFrame, num_horizons: int = 15):
+    """Generate forward-return class labels for all horizons simultaneously.
+
+    Thresholds:
+        h=1..5:   ±3%  (short-term)
+        h=6..15:  ±5%  (medium-term)
+
+    Class encoding (matches CLASS_LABELS):
+        0 = flat/neutral
+        1 = UP  (return >= thr)
+        2 = DOWN (return <= -thr)
+
+    Returns:
+        labels:   np.ndarray shape (n_usable, num_horizons), dtype int64
+        n_usable: int — number of usable rows (len(df) - num_horizons)
+    """
+    closes = df['adjusted close'].values.astype(np.float64)
+    n = len(closes)
+    n_usable = n - num_horizons
+    if n_usable <= 0:
+        raise ValueError(f"Not enough data: {n} rows, need at least {num_horizons + 1}")
+    labels = np.zeros((n_usable, num_horizons), dtype=np.int64)
+    for h in range(1, num_horizons + 1):
+        thr = 0.03 if h <= 5 else 0.05
+        future_closes = closes[h:h + n_usable]
+        current_closes = closes[:n_usable]
+        ret = (future_closes - current_closes) / current_closes
+        labels[:, h - 1] = np.where(ret >= thr, 1, np.where(ret <= -thr, 2, 0))
+    return labels, n_usable
 
 
 def DEPRECATED_download_data(config, param):
@@ -1219,6 +1316,267 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     # Now make prediction
     # 
     make_prediciton_test(model, raw_df, param, currentDateTime, symbol, incr_df)
+
+def analyze_trend_multi_horizon(
+    config: dict, param: dict, current_day_offset: str,
+    incr_df: DataFrame, turn_random_on: bool, use_cached_data: bool,
+    save_dir: str = None,
+):
+    """Train a MultiHorizonTransformer that predicts all 15 horizons in one pass.
+
+    Key differences from analyze_trend():
+    - shuffle_splits=True is a hard error (look-ahead bias on multi-horizon labels)
+    - Labels: (N, 15) forward-return classes, not single-horizon label column
+    - Optimizer: AdamW with gradient clipping (max_norm=1.0)
+    - Stopping: EarlyStopping(patience=15) on val loss (not TrendBasedStopping)
+    - Loss: FocalLoss per horizon, normalized by num_horizons
+    - Checkpoint: state_dict format {state_dict, config, calib_temp, train_date}
+    - Scaler saved as {SYM}_{model_name}_mh_scaler.joblib
+
+    Args:
+        save_dir: Override directory for model + scaler files (for test isolation).
+                  If None, uses 'model/' for model and CWD for scaler (production default).
+    """
+    symbol = param['symbol']
+
+    if param.get('shuffle_splits', False):
+        raise ValueError(
+            f"[{symbol}] shuffle_splits=True is not allowed for model_type='multi_horizon_transformer'. "
+            "It produces misleadingly inflated metrics. Set shuffle_splits=False."
+        )
+
+    # --- Seed setup ---
+    if turn_random_on:
+        random_seed = random.randint(0, 2**32 - 1)
+    else:
+        random_seed = 42
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed_all(random_seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    # --- Load data ---
+    if use_cached_data:
+        file_path = symbol + '_TMP.csv'
+        df = pd.read_csv(file_path)
+        print('> data loaded from cache')
+    else:
+        df = load_data_to_cache(config, param)
+
+    df = feature_value_override(df, param)
+    start_date = param['start_date']
+    df = df[df['date'] >= start_date].reset_index(drop=True)
+    if param.get('end_date') is not None:
+        df = df[df['date'] <= param['end_date']].reset_index(drop=True)
+
+    # --- Build multi-horizon label matrix (N_usable, 15) ---
+    NUM_HORIZONS = param.get('num_horizons', 15)
+    labels_mh, n_usable = build_multi_horizon_labels(df, num_horizons=NUM_HORIZONS)
+
+    # --- Select feature columns (exclude single-horizon 'label') ---
+    feature_cols = [c for c in param['selected_columns'] if c != 'label']
+    feature_cols = [c for c in feature_cols if c in df.columns]
+    features = df[feature_cols].iloc[:n_usable].values  # (n_usable, D)
+
+    # --- Chronological split (no shuffle) ---
+    n_test = int(n_usable * param['test_size'])
+    n_val  = int((n_usable - n_test) * param['validation_size'])
+    n_train = n_usable - n_test - n_val
+
+    train_features = features[:n_train]
+    val_features   = features[n_train:n_train + n_val]
+    test_features  = features[n_train + n_val:]
+    train_labels   = labels_mh[:n_train]
+    val_labels     = labels_mh[n_train:n_train + n_val]
+    test_labels    = labels_mh[n_train + n_val:]
+
+    print(f"[{symbol} MH] train={n_train}, val={n_val}, test={n_test}, features={features.shape[1]}")
+
+    # --- Scaler (fit on train only) ---
+    scaler_type = param.get('scaler_type', 'MinMax')
+    if scaler_type == 'Robust':
+        scaler = RobustScaler()
+    elif scaler_type == 'MinMax':
+        scaler = MinMaxScaler()
+    else:
+        scaler = StandardScaler()
+
+    train_features = scaler.fit_transform(train_features)
+    val_features   = scaler.transform(val_features)
+    test_features  = scaler.transform(test_features)
+
+    scaler_filename = f"{symbol}_{param['model_name']}_mh_scaler.joblib"
+    if save_dir:
+        scaler_path = os.path.join(save_dir, scaler_filename)
+    else:
+        scaler_path = scaler_filename
+    dump(scaler, scaler_path)
+
+    # --- DataLoaders ---
+    batch_size = param['batch_size']
+    train_data = TensorDataset(torch.FloatTensor(train_features), torch.LongTensor(train_labels))
+    val_data   = TensorDataset(torch.FloatTensor(val_features),   torch.LongTensor(val_labels))
+    test_data  = TensorDataset(torch.FloatTensor(test_features),  torch.LongTensor(test_labels))
+
+    for split_name, split_size in [('train', n_train), ('val', n_val), ('test', n_test)]:
+        if split_size < batch_size:
+            print(f'WARNING: [{symbol}] {split_name} split has {split_size} rows < batch_size {batch_size}')
+
+    train_loader = DataLoader(train_data, shuffle=False, batch_size=batch_size, drop_last=False)
+    val_loader   = DataLoader(val_data,   shuffle=False, batch_size=batch_size, drop_last=False)
+    test_loader  = DataLoader(test_data,  shuffle=False, batch_size=batch_size, drop_last=False)
+
+    # --- Model ---
+    feature_count = train_features.shape[1]
+    head_count    = param['headcount']
+    embedded_dim  = param['embedded_dim']
+    if embedded_dim % head_count != 0:
+        print(f'ERROR: embedded_dim ({embedded_dim}) must be divisible by headcount ({head_count})')
+        sys.exit()
+
+    model = build_model(param, input_dim=feature_count, num_classes=3)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+
+    # --- Per-horizon FocalLoss instances with class weights ---
+    focal_losses = []
+    for h in range(NUM_HORIZONS):
+        h_df = pd.DataFrame({'label': train_labels[:, h]})
+        cw = calculate_class_weight(h_df, 3)
+        cw_tensor = torch.tensor(list({i: w for i, w in enumerate(cw)}.values()),
+                                  dtype=torch.float).to(device)
+        focal_losses.append(FocalLoss(weight=cw_tensor, gamma=2.0, label_smoothing=0.1))
+
+    # --- AdamW optimizer + cosine scheduler ---
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=param['learning_rate'],
+        weight_decay=param['l2_weight_decay'],
+    )
+    num_epochs = param['num_epochs']
+    scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    l1_lambda  = param.get('l1_lambda', 0)
+
+    early_stopping = analysisUtil.EarlyStopping(patience=15, min_delta=1e-4)
+
+    use_amp   = (device.type == 'cuda')
+    amp_scaler = torch.amp.GradScaler(enabled=use_amp)
+
+    start_time = time.time()
+
+    for epoch in range(num_epochs):
+        # --- Training phase ---
+        model.train()
+        total_train_loss = 0.0
+        for inputs, labels in train_loader:
+            inputs = inputs.to(device, dtype=torch.float32)
+            labels = labels.to(device, dtype=torch.long)  # (batch, 15)
+
+            optimizer.zero_grad()
+            with torch.amp.autocast(device_type='cuda', enabled=use_amp):
+                outputs = model(inputs)  # (batch, 15, 3)
+                horizon_loss = sum(
+                    focal_losses[h](outputs[:, h, :], labels[:, h])
+                    for h in range(NUM_HORIZONS)
+                ) / NUM_HORIZONS
+                if l1_lambda > 0:
+                    l1_norm = sum(p.abs().sum() for name, p in model.named_parameters()
+                                  if 'weight' in name)
+                    horizon_loss = horizon_loss + l1_lambda * l1_norm
+
+            amp_scaler.scale(horizon_loss).backward()
+            amp_scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            amp_scaler.step(optimizer)
+            amp_scaler.update()
+            total_train_loss += horizon_loss.item()
+
+        avg_train_loss = total_train_loss / len(train_loader)
+        scheduler.step()
+
+        # --- Validation phase ---
+        model.eval()
+        total_val_loss = 0.0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                inputs = inputs.to(device, dtype=torch.float32)
+                labels = labels.to(device, dtype=torch.long)
+                with torch.amp.autocast(device_type='cuda', enabled=use_amp):
+                    outputs = model(inputs)
+                    val_horizon_loss = sum(
+                        focal_losses[h](outputs[:, h, :], labels[:, h])
+                        for h in range(NUM_HORIZONS)
+                    ) / NUM_HORIZONS
+                total_val_loss += val_horizon_loss.item()
+        avg_val_loss = total_val_loss / len(val_loader)
+
+        if (epoch + 1) % 10 == 0:
+            print(f'Epoch [{epoch+1}/{num_epochs}]  train_loss={avg_train_loss:.4f}  val_loss={avg_val_loss:.4f}')
+
+        early_stopping(avg_val_loss, model)
+        if early_stopping.early_stop:
+            print(f"Early stopping at epoch {epoch + 1}")
+            model.load_state_dict(early_stopping.best_model)
+            break
+
+    elapsed = time.time() - start_time
+    print(f">>>Time elapsed for multi-horizon training: {elapsed:.1f}s")
+
+    # --- Save checkpoint (state_dict format) ---
+    if turn_random_on:
+        random_str = 'random'
+    else:
+        random_str = 'fixed'
+
+    eastern = pytz.timezone('US/Eastern')
+    currentDateTime = datetime.now(eastern)
+    train_date = currentDateTime.strftime("%Y-%m-%d %H:%M:%S")
+
+    model_dir = save_dir if save_dir else 'model'
+    os.makedirs(model_dir, exist_ok=True)
+    model_filename = f"model_{symbol}_{param['model_name']}_mh_{random_str}_noTimesplit.pth"
+    model_path = os.path.join(model_dir, model_filename)
+
+    assert not os.path.abspath(model_path).startswith(os.path.abspath('/workspace/model/')) or save_dir is None, \
+        "Test must not write to production model dir"
+
+    torch.save({
+        'state_dict': model.state_dict(),
+        'config': param,
+        'calib_temp': 1.0,
+        'train_date': train_date,
+    }, model_path)
+    print(f"Model saved as {model_path}")
+
+    # --- Test set evaluation ---
+    model.eval()
+    all_preds = []
+    with torch.no_grad():
+        for inputs, _ in test_loader:
+            inputs  = inputs.to(device, dtype=torch.float32)
+            outputs = model(inputs)                                   # (batch, 15, 3)
+            preds   = torch.argmax(torch.softmax(outputs, dim=-1), dim=-1)  # (batch, 15)
+            all_preds.append(preds.cpu().numpy())
+    test_preds = np.concatenate(all_preds, axis=0)  # (N_test, 15)
+
+    print('====> Multi-horizon TEST set performance <====')
+    bucket_f1 = {'h1_5': [], 'h6_15': []}
+    for h in range(NUM_HORIZONS):
+        p, r, f1_h, _ = precision_recall_fscore_support(
+            test_labels[:, h], test_preds[:, h], average=None, labels=[0, 1, 2], zero_division=0
+        )
+        macro = np.mean(f1_h)
+        bucket = 'h1_5' if h < 5 else 'h6_15'
+        bucket_f1[bucket].append(macro)
+        print(f'  h={h+1:2d}: F1[flat={f1_h[0]:.3f}  UP={f1_h[1]:.3f}  DN={f1_h[2]:.3f}]  macro={macro:.3f}')
+
+    for bname, vals in bucket_f1.items():
+        print(f'  Bucket {bname}: mean macro-F1 = {np.mean(vals):.3f}')
+
+    return model, test_preds, test_labels, model_path, scaler_path
+
 
 def load_data_to_cache(config: dict[str, str], param: dict[str]):
     df, num_data_points, display_date_range = analysisUtil.download_data(config, param)    
