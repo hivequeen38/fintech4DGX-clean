@@ -162,7 +162,44 @@ class PositionalEncoding(nn.Module):
         # x shape: [batch_size, seq_length, embedding_dim]
         x = x + self.pe[:, :x.size(1), :]
         return self.dropout(x)
-    
+
+
+def build_model(param: dict, input_dim: int, num_classes: int = 3) -> nn.Module:
+    """
+    Model factory: instantiate a model based on param['model_type'].
+    Defaults to 'transformer' if the key is absent (backward compatible).
+
+    To add a new architecture:
+      1. Define a new nn.Module class above this function
+      2. Add an elif branch here
+      3. Add 'model_type': '<name>' to the param dict for that stock/config
+    """
+    model_type = param.get('model_type', 'transformer')
+
+    if model_type == 'transformer':
+        return TransformerModel(
+            input_dim=input_dim,
+            num_classes=num_classes,
+            num_heads=param['headcount'],
+            num_layers=param['num_layers'],
+            dropout_rate=param['dropout_rate'],
+            embedded_dim=param['embedded_dim'],
+        )
+    # elif model_type == 'lstm':
+    #     return LSTMModel(
+    #         input_dim=input_dim,
+    #         num_classes=num_classes,
+    #         hidden_size=param['hidden_size'],
+    #         num_layers=param['num_layers'],
+    #         dropout_rate=param['dropout_rate'],
+    #     )
+    else:
+        raise ValueError(
+            f"Unknown model_type: '{model_type}'. "
+            f"Supported types: ['transformer']"
+        )
+
+
 def DEPRECATED_download_data(config, param):
 
     # Use the bulk fetch code to get all the needed stuff in one call
@@ -855,7 +892,7 @@ def analyze_trend( config: dict[str, str], param: dict[str], current_day_offset:
     ############################
     # NEW REGULARIZATION CODE
     # Instantiate the model
-    model = TransformerModel(input_dim= feature_count, num_classes=num_classes, num_heads= head_count, num_layers=param['num_layers'], dropout_rate=param['dropout_rate'], embedded_dim=param['embedded_dim'])
+    model = build_model(param, input_dim=feature_count, num_classes=num_classes)
     
     # Check if CUDA (GPU support) is available and use it, otherwise use CPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
