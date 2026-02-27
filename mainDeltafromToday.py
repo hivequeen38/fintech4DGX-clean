@@ -236,7 +236,15 @@ def mz_main(param: dict[str], run_date=None, input_comment=None, load_cache=True
 
 #########################################
 # MAIN LOOP enters here for training
-def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None, load_cache=True):
+def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None, load_cache=True,
+         model_type: str = "transformer"):
+    """Train models for a given param set.
+
+    Args:
+        model_type: Selects the training backend.
+            "transformer" (default) — 15 single-horizon TransformerModels, one per horizon.
+            "trans_mz"             — one MultiHorizonTransformer trained across all 15 horizons.
+    """
     logging.basicConfig(level=logging.INFO)
 
     if (run_date is None):
@@ -248,85 +256,84 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
     param['end_date'] = end_date
 
     if (input_comment is None):
-        input_comment = '(' + param["model_name"] + ')'
+        input_comment = '(' + param.get("model_name", model_type) + ')'
 
-    # load today's data
-    # trendAnalysisBlackBox.load_data_to_cache(trendConfig.config, param)
+    # load today's data (common to all model types)
     if load_cache == True:
         trendAnalysisFromTodayNew.load_data_to_cache(trendConfig.config, param)
-    
-    #  DO FIXED SEED
-    #
-    input_col = ['date', 'close', 'p1', 'p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15', 'comment']
-    incr_df = pd.DataFrame(columns=input_col)
-    incr_df = incr_df.reset_index(drop=True)
-    
-    # for first 5 days at 3%, then rest of the 15 days at 5%
-    comment = f'(tra)({param["model_name"]}) RD={run_date}'
 
-    use_time_split = param.get('use_time_split', False)
+    if model_type == "transformer":
+        #  DO FIXED SEED
+        #
+        input_col = ['date', 'close', 'p1', 'p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15', 'comment']
+        incr_df = pd.DataFrame(columns=input_col)
+        incr_df = incr_df.reset_index(drop=True)
 
-    param["threshold"] = 0.03
-    process_first_5_days(param, incr_df, False, comment, use_time_split)
+        # for first 5 days at 3%, then rest of the 15 days at 5%
+        comment = f'(tra)({param["model_name"]}) RD={run_date}'
 
-    param["threshold"] = 0.05
-    process_last_10_days(param, incr_df, False, comment, use_time_split)
+        use_time_split = param.get('use_time_split', False)
 
+        param["threshold"] = 0.03
+        process_first_5_days(param, incr_df, False, comment, use_time_split)
 
-    # at this point there are 15x individual result files that's been updated. 
-    # grab the current date and the closing price from the first one 
-    # NVDA_1d_predictions_test.csv
-    #
+        param["threshold"] = 0.05
+        process_last_10_days(param, incr_df, False, comment, use_time_split)
 
-    dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(param)
-    processDeltaFromTodayResults(param["symbol"], incr_df, dateStr, closing_price, comment, last_cp_vol, param, last_vol_ratio)
+        # at this point there are 15x individual result files that's been updated.
+        # grab the current date and the closing price from the first one
+        # NVDA_1d_predictions_test.csv
+        #
+        dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(param)
+        processDeltaFromTodayResults(param["symbol"], incr_df, dateStr, closing_price, comment, last_cp_vol, param, last_vol_ratio)
 
-    # RANDOM SEED
-    #
-    # input_col = ['date', 'close', 'p1', 'p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15']
-    # incr_df = pd.DataFrame(columns=input_col)
-    # incr_df = incr_df.reset_index(drop=True)
-    
-    # # for first 5 days at 3%, then rest of the 15 days at 5%
+        # now archive the tmp file with a date-tagged name so it can be recreated
+        oldFileName = param["symbol"] + '_TMP.csv'
+        newFileName = param['symbol'] + '_' + dateStr + '_TMP.csv'
 
-    # comment = 'Training (Random)'  + ' RD=' + str(run_date) + ' ' + input_comment
+        subfolder = param["symbol"] + "_data"
+        os.makedirs(subfolder, exist_ok=True)
+        filepath = os.path.join(subfolder, newFileName)
 
-    # param["threshold"] = 0.03
-    # process_first_5_days(param, incr_df, True, comment)
+        try:
+            shutil.copyfile(oldFileName, filepath)
+            print(f"File copied from {oldFileName} to {filepath}")
+        except FileNotFoundError:
+            print(f"The file {oldFileName} does not exist.")
+        except PermissionError:
+            print("You do not have permission to access or modify this file.")
+        except IsADirectoryError:
+            print(f"One of the paths refers to a directory, not a file.")
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
 
-    # param["threshold"] = 0.05
-    # process_last_10_days(param, incr_df, True, comment)
+    elif model_type == "trans_mz":
+        # Single MultiHorizonTransformer trained across all 15 horizons in one pass.
+        # Inject required MH keys; caller may pre-set them in the param dict.
+        mz_param = {**param}
+        mz_param.setdefault('model_type', 'multi_horizon_transformer')
+        mz_param.setdefault('num_horizons', 15)
+        mz_param.setdefault('shuffle_splits', False)
+        mz_param.setdefault('model_name', 'mh_mz')
 
+        comment = f'(tra)({mz_param["model_name"]}) RD={run_date}'
+        mz_param['comment'] = comment
 
-    # # at this point there are 15x individual result files that's been updated. 
-    # # grab the current date and the closing price from the first one 
-    # # NVDA_1d_predictions_test.csv
-    # #
- 
-    # dateStr, closing_pric, last_cp_vol = fetchDateAndClosing(param)
-    # processDeltaFromTodayResults(param["symbol"], incr_df, dateStr, closing_price, comment, last_cp_vol, param)
+        trendAnalysisFromTodayNew.analyze_trend_multi_horizon(
+            config=trendConfig.config,
+            param=mz_param,
+            current_day_offset=end_date,
+            incr_df=pd.DataFrame(),
+            turn_random_on=False,
+            use_cached_data=True,
+            save_dir=None,   # production: writes to model/
+        )
 
-    # now rename the tmp file by a date tagged tmp file so it can be recreated
-    oldFileName = param["symbol"] + '_TMP.csv'
-    newFileName = param['symbol'] + '_' + dateStr + '_TMP.csv'
-
-    subfolder = param["symbol"] + "_data"
-    os.makedirs(subfolder, exist_ok=True)
-    filepath = os.path.join(subfolder, newFileName)
-
-    try:
-        shutil.copyfile(oldFileName, filepath)
-        print(f"File copied from {oldFileName} to {filepath}")
-    except FileNotFoundError:
-        print(f"The file {oldFileName} does not exist.")
-    except PermissionError:
-        print("You do not have permission to access or modify this file.")
-    except IsADirectoryError:
-        print(f"One of the paths refers to a directory, not a file.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-    # os.rename(oldFileName, newFileName)
+    else:
+        raise ValueError(
+            f"Unknown model_type: '{model_type}'. "
+            f"Supported types: ['transformer', 'trans_mz']"
+        )
 
 #########################################
 # MAIN LOOP enters here for training
