@@ -1328,7 +1328,7 @@ def analyze_trend_multi_horizon(
     - shuffle_splits=True is a hard error (look-ahead bias on multi-horizon labels)
     - Labels: (N, 15) forward-return classes, not single-horizon label column
     - Optimizer: AdamW with gradient clipping (max_norm=1.0)
-    - Stopping: EarlyStopping(patience=15) on val loss (not TrendBasedStopping)
+    - Stopping: EarlyStopping(patience=50) on val loss (not TrendBasedStopping)
     - Loss: FocalLoss per horizon, normalized by num_horizons
     - Checkpoint: state_dict format {state_dict, config, calib_temp, train_date}
     - Scaler saved as {SYM}_{model_name}_mh_scaler.joblib
@@ -1441,13 +1441,21 @@ def analyze_trend_multi_horizon(
     model.to(device)
 
     # --- Per-horizon FocalLoss instances with class weights ---
+    # label_smoothing=0.0: minority classes (UP/DN) need unsmoothed gradient signal.
+    # Smoothing reduces the gradient for correct predictions, hurting rare UP samples.
     focal_losses = []
+    print(f"\n[{symbol} MH] Per-horizon label distribution (train={n_train} samples):")
+    print(f"  {'h':>3}  {'flat':>6}  {'UP':>6}  {'DN':>6}  {'w_flat':>7}  {'w_UP':>7}  {'w_DN':>7}")
     for h in range(NUM_HORIZONS):
-        h_df = pd.DataFrame({'label': train_labels[:, h]})
-        cw = calculate_class_weight(h_df, 3)
-        cw_tensor = torch.tensor(list({i: w for i, w in enumerate(cw)}.values()),
-                                  dtype=torch.float).to(device)
-        focal_losses.append(FocalLoss(weight=cw_tensor, gamma=2.0, label_smoothing=0.1))
+        h_labels = train_labels[:, h]
+        n_total = len(h_labels)
+        counts = [int((h_labels == c).sum()) for c in range(3)]
+        # weight = n_total / (n_classes * count_c); absent class → 0.0
+        cw = [n_total / (3 * counts[c]) if counts[c] > 0 else 0.0 for c in range(3)]
+        cw_tensor = torch.tensor(cw, dtype=torch.float).to(device)
+        focal_losses.append(FocalLoss(weight=cw_tensor, gamma=2.0, label_smoothing=0.0))
+        print(f"  h={h+1:2d}  {counts[0]:6d}  {counts[1]:6d}  {counts[2]:6d}  "
+              f"{cw[0]:7.3f}  {cw[1]:7.3f}  {cw[2]:7.3f}")
 
     # --- AdamW optimizer + cosine scheduler ---
     optimizer = optim.AdamW(
@@ -1459,7 +1467,9 @@ def analyze_trend_multi_horizon(
     scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
     l1_lambda  = param.get('l1_lambda', 0)
 
-    early_stopping = analysisUtil.EarlyStopping(patience=15, min_delta=1e-4)
+    # patience=50: multi-horizon training needs more epochs for minority class (UP) to emerge.
+    # patience=15 stopped training at epoch 36 before UP class gradient had time to build.
+    early_stopping = analysisUtil.EarlyStopping(patience=50, min_delta=1e-4)
 
     use_amp   = (device.type == 'cuda')
     amp_scaler = torch.amp.GradScaler(enabled=use_amp)
