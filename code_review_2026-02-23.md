@@ -232,7 +232,7 @@ Functions like `calculate_label`, `validate`, `make_prediciton_test` have no doc
 | 19 | ~~MEDIUM~~ NOT AN ISSUE | trendAnalysis:159 | PyTorch | PE buffer moves correctly with model.to(device) on PyTorch 2.5.0 |
 | 20 | ~~MEDIUM~~ DEFERRED | *_param.py | Config | No hyperparameter validation — low risk, deferred until param files are more actively modified |
 | 21 | ~~MEDIUM~~ FIXED | trendAnalysis:1137 | Perf | Migrated to JSONL append — no full rewrite, no corruption risk, file size halved |
-| 22 | MEDIUM | get_historical_html:399 | Perf | iterrows() on large table |
+| 22 | ~~MEDIUM~~ FIXED | get_historical_html:399 | Perf | Replaced iterrows() with itertuples() — 10-100x faster for large tables |
 | 23 | LOW | trendAnalysis:27 | Code | Duplicate import |
 | 24 | LOW | trendAnalysis | Code | Typos: make_prediciton, advise, dateshould |
 | 25 | LOW | multiple | Code | Large blocks of commented-out code |
