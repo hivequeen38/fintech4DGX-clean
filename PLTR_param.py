@@ -897,3 +897,17 @@ reference = {
 
 # Identical to reference but uses chronological (no-shuffle) train/test split — honest out-of-sample evaluation
 reference_no_shuffle = {**reference, "model_name": "ref_noshuf", "shuffle_splits": False}
+
+# Multi-zone (MH) param set — same features as reference but with MZ-tuned capacity hyperparams.
+# Note: start_date kept at 2021-09-30 (PLTR data constraint).
+mz_reference = {
+    **reference,
+    "model_name": "mz_reference",
+    "shuffle_splits": False,   # MH always uses chronological split
+    "batch_size": 64,          # MZ: reduced from 128 for better gradient signal
+    "num_layers": 3,           # MZ: increased from 2 for extra capacity
+    "dropout_rate": 0.2,       # MZ: increased from 0.1 to regularize deeper model
+    "l1_lambda": 5e-6,         # MZ: relaxed from 1e-6
+    "l2_weight_decay": 2e-5,   # MZ: relaxed from 1.6e-5
+    "num_zones": 15,           # MZ: number of prediction horizons
+}

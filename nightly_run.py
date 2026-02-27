@@ -63,10 +63,12 @@ TICKER_PARAMS = [
     (NVDA_param.reference,              'transformer'),
     (NVDA_param.AAII_option_vol_ratio,  'transformer'),
     (NVDA_param.reference_no_shuffle,   'transformer'),
+    (NVDA_param.mz_reference,           'trans_mz'),   # Phase 1 skipped (B-MH5)
     # PLTR
     (PLTR_param.reference,              'transformer'),
     (PLTR_param.AAII_option_vol_ratio,  'transformer'),
     (PLTR_param.reference_no_shuffle,   'transformer'),
+    (PLTR_param.mz_reference,           'trans_mz'),   # Phase 1 skipped (B-MH5)
     # APP
     (APP_param.reference,               'transformer'),
     (APP_param.AAII_option_vol_ratio,   'transformer'),
@@ -167,6 +169,14 @@ if not args.skip_train:
                             input_comment='(ref_noshuf)')
     mainDeltafromToday.main(INOD_param.reference_no_shuffle, end_date=today_date_str,
                             input_comment='(ref_noshuf)')
+    get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
+
+    # ── MZ (multi-horizon) runs — NVDA + PLTR only ────────────────────────────
+    step_banner('Training: trans_mz (NVDA + PLTR)')
+    mainDeltafromToday.main(NVDA_param.mz_reference, end_date=today_date_str,
+                            model_type='trans_mz', input_comment='(mh_mz)')
+    mainDeltafromToday.main(PLTR_param.mz_reference, end_date=today_date_str,
+                            model_type='trans_mz', input_comment='(mh_mz)')
     get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
 
     print(f'\n[Phase 2 done in {time.time()-t0:.0f}s]')
