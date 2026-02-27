@@ -1646,7 +1646,7 @@ def make_inference( config: dict[str, str], param: dict[str], current_day_offset
     # load it from the model subdirectory
     model_name = 'model/model_'+ param['symbol'] + '_' + param['model_name'] + '_' + random_str + '_' + time_split_str + '_' + str(current_day_offset) +'.pth'
     print('> loading model name: ' + model_name + '...')
-    model = torch.load(model_name)
+    model = torch.load(model_name, weights_only=False)
 
     ############################################################
     # Now make prediction
