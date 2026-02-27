@@ -348,6 +348,42 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
             .reference-row .comment {{
                 color: #ffffff;
             }}
+            .aaii-row {{
+                background-color: #fef08a;
+                color: #1a1a1a;
+            }}
+            .aaii-row .up {{
+                color: #166534;
+                font-weight: bold;
+            }}
+            .aaii-row .down {{
+                color: #991b1b;
+                font-weight: bold;
+            }}
+            .aaii-row .neutral {{
+                color: #555555;
+            }}
+            .aaii-row .comment {{
+                color: #1a1a1a;
+            }}
+            .noshuf-row {{
+                background-color: #dc2626;
+                color: #ffffff;
+            }}
+            .noshuf-row .up {{
+                color: #86efac;
+                font-weight: bold;
+            }}
+            .noshuf-row .down {{
+                color: #fca5a5;
+                font-weight: bold;
+            }}
+            .noshuf-row .neutral {{
+                color: #fecaca;
+            }}
+            .noshuf-row .comment {{
+                color: #ffffff;
+            }}
             .oscillator {{
                 margin-top: 20px;
                 text-align: right;
@@ -403,8 +439,14 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
         # Check if this is a new date
         is_new_date = previous_date is not None and current_date != previous_date
 
-        # Check if this row contains "(ref)" in the comment
-        is_reference = "(ref)" in str(row.comment)
+        # Determine model type from comment for row color coding
+        comment_str = str(row.comment)
+        if 'noshuf' in comment_str or 'no_shuffle' in comment_str:
+            row_type = 'noshuf'
+        elif 'AAII' in comment_str:
+            row_type = 'aaii'
+        else:
+            row_type = 'reference'
 
         # Add date and close
         cells.append(f'<td>{current_date}</td>')
@@ -429,7 +471,11 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
         row_classes = []
         if is_new_date:
             row_classes.append("date-separator")
-        if is_reference:
+        if row_type == 'noshuf':
+            row_classes.append("noshuf-row")
+        elif row_type == 'aaii':
+            row_classes.append("aaii-row")
+        else:
             row_classes.append("reference-row")
         
         # Add the class attribute if there are any classes
