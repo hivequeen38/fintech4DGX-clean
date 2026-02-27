@@ -396,23 +396,23 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
     # Keep track of the previous date to detect changes
     previous_date = None
 
-    for _, row in df_sorted.iterrows():
+    for row in df_sorted.itertuples(index=False):
         cells = []
-        current_date = row["date"]
+        current_date = row.date
 
         # Check if this is a new date
         is_new_date = previous_date is not None and current_date != previous_date
 
         # Check if this row contains "(ref)" in the comment
-        is_reference = "(ref)" in str(row["comment"])
-        
+        is_reference = "(ref)" in str(row.comment)
+
         # Add date and close
         cells.append(f'<td>{current_date}</td>')
-        cells.append(f'<td>{row["close"]}</td>')
-        
+        cells.append(f'<td>{row.close}</td>')
+
         # Add predictions (p1-p15)
         for i in range(1, 16):
-            value = row[f'p{i}']
+            value = getattr(row, f'p{i}')
             class_name = ''
             if value == 'UP':
                 class_name = 'up'
@@ -421,9 +421,9 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
             else:
                 class_name = 'neutral'
             cells.append(f'<td class="{class_name}">{value}</td>')
-        
+
         # Add comment with left alignment
-        cells.append(f'<td class="comment" style="text-align: left; padding-left: 10px;">{row["comment"]}</td>')
+        cells.append(f'<td class="comment" style="text-align: left; padding-left: 10px;">{row.comment}</td>')
         
         # Determine row classes
         row_classes = []
