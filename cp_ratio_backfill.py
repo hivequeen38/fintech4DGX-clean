@@ -242,7 +242,8 @@ def fetch_cp_and_iv(symbol, dates_df, api_key):
                      'cp_volume_ratio', 'cp_oi_ratio', 'bullish_volume', 'bearish_volume']
     existing_cp_float_cols = [c for c in cp_float_cols if c in results_df.columns]
     results_df[existing_cp_float_cols] = results_df[existing_cp_float_cols].fillna(0.0)
-    results_df['daily_sentiment'] = results_df['daily_sentiment'].fillna('no_trades')
+    if 'daily_sentiment' in results_df.columns:
+        results_df['daily_sentiment'] = results_df['daily_sentiment'].fillna('no_trades')
 
     if not results_df.empty:
         results_df.sort_values(by='date').to_csv(file_path, index=False)
