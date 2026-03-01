@@ -240,7 +240,8 @@ def fetch_cp_and_iv(symbol, dates_df, api_key):
 
     cp_float_cols = ['call_volume', 'put_volume', 'call_oi', 'put_oi',
                      'cp_volume_ratio', 'cp_oi_ratio', 'bullish_volume', 'bearish_volume']
-    results_df[cp_float_cols] = results_df[cp_float_cols].fillna(0.0)
+    existing_cp_float_cols = [c for c in cp_float_cols if c in results_df.columns]
+    results_df[existing_cp_float_cols] = results_df[existing_cp_float_cols].fillna(0.0)
     results_df['daily_sentiment'] = results_df['daily_sentiment'].fillna('no_trades')
 
     if not results_df.empty:
