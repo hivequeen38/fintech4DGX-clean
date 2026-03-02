@@ -174,11 +174,11 @@ AAII_option_vol_ratio = {
         'cp_sentiment_ratio',
         'options_volume_ratio',
         ##################################
-        # Implied Volatility features — PENDING BACKFILL (re-enable after cp_ratio_backfill.py runs)
+        # Implied Volatility features — backfill complete 2026-03-01
         ##################################
-        # 'iv_30d',        # front-month OI-weighted IV (20-45 DTE): overall vol regime
-        # 'iv_skew_30d',   # put IV minus call IV (30d): fear premium
-        # 'iv_term_ratio', # iv_7d / iv_30d: >1 = short-dated vol elevated = event risk
+        'iv_30d',          # front-month OI-weighted IV (20-45 DTE): overall vol regime
+        'iv_skew_30d',     # put IV minus call IV (30d): fear premium
+        'iv_term_ratio',   # iv_7d / iv_30d: >1 = short-dated vol elevated = event risk
         ],
     'robust_features': [    # volatile features like volume, returns, etc, should be here (this for using robust_scaler)
         "daily_return",     # this is good
@@ -206,9 +206,9 @@ AAII_option_vol_ratio = {
         'rv_20d',
         'rv_term_ratio',
         'vix_rv_ratio',
-        # 'iv_30d',        # PENDING BACKFILL
-        # 'iv_skew_30d',   # PENDING BACKFILL
-        # 'iv_term_ratio', # PENDING BACKFILL
+        'iv_30d',          # backfill complete 2026-03-01
+        'iv_skew_30d',     # backfill complete 2026-03-01
+        'iv_term_ratio',   # backfill complete 2026-03-01
     ],
     "window_size": 35,
     "target_size": 15,
