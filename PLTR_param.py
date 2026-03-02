@@ -911,3 +911,18 @@ mz_reference = {
     "l2_weight_decay": 2e-5,   # MZ: relaxed from 1.6e-5
     "num_zones": 15,           # MZ: number of prediction horizons
 }
+
+# v2 tuning pass — addresses UP/DN class collapse seen in 2026-03-01 run.
+# PLTR has fewer samples than NVDA (656 vs 745 train) and a strong UP trend
+# in the test period, causing the model to collapse to single-class predictions.
+# Changes vs mz_reference:
+#   num_layers  3 → 2   : simpler model fits better on smaller dataset
+#   batch_size  64 → 32  : more gradient updates per epoch, stronger minority-class signal
+#   patience    (from EarlyStopping default 50) stays 50 — may increase if still collapsing
+# ACTIVATE: swap PLTR_param.mz_reference → PLTR_param.mz_reference_v2 in nightly_run.py
+mz_reference_v2 = {
+    **mz_reference,
+    "model_name": "mz_reference_v2",
+    "num_layers": 2,           # v2: back to 2 — less capacity, better fit for 656 samples
+    "batch_size": 32,          # v2: smaller batch for stronger per-update gradient signal
+}

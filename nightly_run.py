@@ -69,6 +69,7 @@ TICKER_PARAMS = [
     (PLTR_param.AAII_option_vol_ratio,  'transformer'),
     (PLTR_param.reference_no_shuffle,   'transformer'),
     (PLTR_param.mz_reference,           'trans_mz'),   # Phase 1 skipped (B-MH5)
+    # TODO(tuning): swap above line to mz_reference_v2 when activating v2 training
     # APP
     (APP_param.reference,               'transformer'),
     (APP_param.AAII_option_vol_ratio,   'transformer'),
@@ -175,8 +176,11 @@ if not args.skip_train:
     step_banner('Training: trans_mz (NVDA + PLTR)')
     mainDeltafromToday.main(NVDA_param.mz_reference, end_date=today_date_str,
                             model_type='trans_mz', input_comment='(mh_mz)')
+    # TODO(tuning): change mz_reference → mz_reference_v2 below to activate PLTR MZ v2
     mainDeltafromToday.main(PLTR_param.mz_reference, end_date=today_date_str,
                             model_type='trans_mz', input_comment='(mh_mz)')
+    # mainDeltafromToday.main(PLTR_param.mz_reference_v2, end_date=today_date_str,
+    #                         model_type='trans_mz', input_comment='(mh_mz_v2)')
     get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
 
     print(f'\n[Phase 2 done in {time.time()-t0:.0f}s]')
