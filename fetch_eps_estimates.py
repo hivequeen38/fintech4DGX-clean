@@ -54,11 +54,21 @@ DAILY_FEATURE_COLS = [
     "eps_est_analyst_count",
     "eps_rev_7_pct",
     "eps_rev_30_pct",
+    "eps_rev_accel",
     "eps_breadth_ratio_7",
     "eps_breadth_ratio_30",
     "eps_dispersion",
     "log_analyst_count",
 ]
+
+# Cols knowable when Q_i is REPORTED (anchor = report_date[i]).
+# Forward-looking estimates: valid to activate when the prior quarter closes.
+_ESTIMATE_COLS = ["eps_est_avg", "eps_est_analyst_count", "log_analyst_count"]
+
+# Cols only knowable when Q_{i+1} is REPORTED (anchor = report_date[i+1]).
+# Revision/breadth stats are within-quarter snapshots; anchoring them at report_date[i]
+# would broadcast end-of-Q_{i+1} revision activity back to the start of Q_{i+1} — look-ahead bias.
+_REVISION_COLS = [c for c in DAILY_FEATURE_COLS if c not in _ESTIMATE_COLS]
 
 
 # ── Fetching ──────────────────────────────────────────────────────────────────
@@ -71,6 +81,12 @@ def fetch_av_earnings_estimates(symbol: str, api_key: str) -> pd.DataFrame:
     forward estimate). Columns are renamed to short internal names (see _COL_MAP).
     Numeric columns are cast to float; nulls become NaN.
     """
+    import fetch_cache as _fc
+    _cached = _fc.load(f'AV_EPS_EST_{symbol}', 'symbol')
+    if _cached is not None:
+        print(f'[CACHE HIT disk] EPS_EST {symbol}')
+        return _cached
+
     url = "https://www.alphavantage.co/query"
     params = {
         "function": "EARNINGS_ESTIMATES",
@@ -93,7 +109,9 @@ def fetch_av_earnings_estimates(symbol: str, api_key: str) -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    return df.sort_values("fiscal_date").reset_index(drop=True)
+    result = df.sort_values("fiscal_date").reset_index(drop=True)
+    _fc.save(f'AV_EPS_EST_{symbol}', 'symbol', result)
+    return result
 
 
 def _get_fiscal_to_report_map(symbol: str, api_key: str) -> dict:
@@ -163,6 +181,9 @@ def _compute_tier1_features(df: pd.DataFrame) -> pd.DataFrame:
     # Coverage (log scale to dampen outliers)
     df["log_analyst_count"] = np.log1p(df["eps_est_analyst_count"].fillna(0))
 
+    # Revision acceleration: is revision momentum speeding up?
+    df["eps_rev_accel"] = df["eps_rev_7_pct"] - df["eps_rev_30_pct"]
+
     return df
 
 
@@ -172,64 +193,83 @@ def _build_anchor_series(
     quarterly: pd.DataFrame,
     fiscal_to_report_map: dict,
     next_q_row: pd.Series | None,
-) -> pd.DataFrame:
+) -> tuple:
     """
-    Build a DataFrame of (anchor_date, feature_values) pairs.
+    Build two anchor DataFrames: one for estimate cols, one for revision cols.
 
-    Convention (mirrors estEPS shift logic in fetchBulkData.py):
-      After quarter Q_i is reported (report_date_i), the estimate that
-      becomes "active" for investors is Q_{i+1}'s estimate.
+    Estimate cols (anchor = report_date[i]):
+      When Q_i is reported, Q_{i+1}'s forward estimates become "active".
 
-    So each anchor point pairs  report_date[i]  →  eps_est_avg[i+1].
+    Revision cols (anchor = report_date[i+1]):
+      Revision/breadth stats for Q_{i+1} are only knowable once Q_{i+1} is
+      reported — anchoring earlier would broadcast end-of-quarter activity
+      back to the start of the quarter (look-ahead bias).
+      Exception: next_q_row (current forward estimate) uses report_date[i]
+      since its revision stats reflect today's actual state.
 
-    The last historical quarter's report_date is paired with the
-    "next fiscal quarter" forward estimate (if available).
+    Returns
+    -------
+    (est_anchors, rev_anchors) : two DataFrames sorted by anchor_date.
     """
-    rows = []
+    def _report_date(row):
+        fiscal_str = row["fiscal_date"].strftime("%Y-%m-%d")
+        rd = fiscal_to_report_map.get(fiscal_str)
+        return pd.to_datetime(rd) if rd else row["fiscal_date"] + pd.Timedelta(days=45)
+
+    est_rows = []
+    rev_rows = []
     n = len(quarterly)
 
     for i in range(n):
-        row_i = quarterly.iloc[i]
-        fiscal_i = row_i["fiscal_date"].strftime("%Y-%m-%d")
+        est_anchor = _report_date(quarterly.iloc[i])
 
-        report_date_str = fiscal_to_report_map.get(fiscal_i)
-        if report_date_str:
-            anchor_date = pd.to_datetime(report_date_str)
-        else:
-            # Fallback: fiscal end + 45 days (typical NVDA reporting lag)
-            anchor_date = row_i["fiscal_date"] + pd.Timedelta(days=45)
-
-        # Feature source: next quarter (i+1)
         if i + 1 < n:
             feature_src = quarterly.iloc[i + 1]
+            rev_anchor = _report_date(feature_src)
         elif next_q_row is not None:
             feature_src = next_q_row
+            rev_anchor = est_anchor  # current snapshot — no look-ahead
         else:
-            continue  # No next quarter data; skip this anchor
+            continue
 
-        rec = {"anchor_date": anchor_date}
-        for col in DAILY_FEATURE_COLS:
-            rec[col] = feature_src.get(col, np.nan)
-        rows.append(rec)
+        est_rec = {"anchor_date": est_anchor}
+        for col in _ESTIMATE_COLS:
+            est_rec[col] = feature_src.get(col, np.nan)
+        est_rows.append(est_rec)
 
-    if not rows:
-        return pd.DataFrame(columns=["anchor_date"] + DAILY_FEATURE_COLS)
+        rev_rec = {"anchor_date": rev_anchor}
+        for col in _REVISION_COLS:
+            rev_rec[col] = feature_src.get(col, np.nan)
+        rev_rows.append(rev_rec)
 
-    return pd.DataFrame(rows).sort_values("anchor_date").reset_index(drop=True)
+    _empty_est = pd.DataFrame(columns=["anchor_date"] + _ESTIMATE_COLS)
+    _empty_rev = pd.DataFrame(columns=["anchor_date"] + _REVISION_COLS)
+
+    est_df = pd.DataFrame(est_rows).sort_values("anchor_date").reset_index(drop=True) if est_rows else _empty_est
+    rev_df = pd.DataFrame(rev_rows).sort_values("anchor_date").reset_index(drop=True) if rev_rows else _empty_rev
+
+    return est_df, rev_df
 
 
-def _forward_fill_anchors(daily_df: pd.DataFrame, anchors: pd.DataFrame) -> pd.DataFrame:
+def _forward_fill_anchors(
+    daily_df: pd.DataFrame,
+    anchors: pd.DataFrame,
+    cols: list,
+) -> pd.DataFrame:
     """
     Write feature values from each anchor into daily_df rows.
 
     Rows from anchor_date[i] (inclusive) up to anchor_date[i+1] (exclusive)
     receive anchor[i]'s values.  Rows before the first anchor stay NaN.
+
+    Only the columns listed in `cols` are written; others are left untouched.
     """
     daily = daily_df.copy()
     daily["_date"] = pd.to_datetime(daily["date"])
 
-    for col in DAILY_FEATURE_COLS:
-        daily[col] = np.nan
+    for col in cols:
+        if col not in daily.columns:
+            daily[col] = np.nan
 
     for i, anchor in anchors.iterrows():
         lo = anchor["anchor_date"]
@@ -238,7 +278,7 @@ def _forward_fill_anchors(daily_df: pd.DataFrame, anchors: pd.DataFrame) -> pd.D
             hi = anchors.iloc[i + 1]["anchor_date"]
             mask &= daily["_date"] < hi
 
-        for col in DAILY_FEATURE_COLS:
+        for col in cols:
             daily.loc[mask, col] = anchor[col]
 
     daily.drop(columns=["_date"], inplace=True)
@@ -297,9 +337,10 @@ def build_daily_estimate_features(
         print(f">  [EPS estimates] Fetching EARNINGS to build fiscal→report mapping...")
         fiscal_to_report_map = _get_fiscal_to_report_map(symbol, api_key)
 
-    # Build anchor series and forward-fill
-    anchors = _build_anchor_series(quarterly_hist, fiscal_to_report_map, next_q_row)
-    augmented = _forward_fill_anchors(daily_df, anchors)
+    # Build anchor series and forward-fill (two passes: estimates then revisions)
+    est_anchors, rev_anchors = _build_anchor_series(quarterly_hist, fiscal_to_report_map, next_q_row)
+    augmented = _forward_fill_anchors(daily_df,  est_anchors, _ESTIMATE_COLS)
+    augmented = _forward_fill_anchors(augmented, rev_anchors, _REVISION_COLS)
 
     covered = augmented["eps_est_avg"].notna().sum()
     print(

@@ -59,10 +59,13 @@ AAII_option_vol_ratio = {
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        'eps_rev_30_pct',         # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_rev_7_pct',          # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_breadth_ratio_30',   # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_dispersion',         # activated 2026-03-09
+        'eps_breadth_ratio_7',    # analyst conviction 7d — activated 2026-03-15
+        'log_analyst_count',      # log1p(analyst_count) — activated 2026-03-15
+        'eps_rev_accel',          # revision momentum (7d-30d) — activated 2026-03-15
 
         ##################################
         # Stock Momentum 
@@ -244,10 +247,13 @@ AAII_reference_test = {
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        'eps_rev_30_pct',         # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_rev_7_pct',          # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_breadth_ratio_30',   # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_dispersion',         # activated 2026-03-09
+        'eps_breadth_ratio_7',    # analyst conviction 7d — activated 2026-03-15
+        'log_analyst_count',      # log1p(analyst_count) — activated 2026-03-15
+        'eps_rev_accel',          # revision momentum (7d-30d) — activated 2026-03-15
 
         ##################################
         # Stock Momentum 
@@ -425,10 +431,13 @@ AAII_Min_features = {
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        'eps_rev_30_pct',         # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_rev_7_pct',          # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_breadth_ratio_30',   # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_dispersion',         # activated 2026-03-09
+        'eps_breadth_ratio_7',    # analyst conviction 7d — activated 2026-03-15
+        'log_analyst_count',      # log1p(analyst_count) — activated 2026-03-15
+        'eps_rev_accel',          # revision momentum (7d-30d) — activated 2026-03-15
 
         ##################################
         # Stock Momentum 
@@ -596,10 +605,13 @@ AAII_reference = {
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        'eps_rev_30_pct',         # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_rev_7_pct',          # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_breadth_ratio_30',   # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_dispersion',         # activated 2026-03-09
+        'eps_breadth_ratio_7',    # analyst conviction 7d — activated 2026-03-15
+        'log_analyst_count',      # log1p(analyst_count) — activated 2026-03-15
+        'eps_rev_accel',          # revision momentum (7d-30d) — activated 2026-03-15
 
         ##################################
         # Stock Momentum 
@@ -780,10 +792,13 @@ reference = {
         # Analyst estimate features (EPS consensus, AV EARNINGS_ESTIMATES)
         ##################################
         'eps_est_avg',            # AV consensus average EPS estimate (upcoming quarter, raw AV units)
-        # 'eps_rev_30_pct',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_rev_7_pct',        # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_breadth_ratio_30', # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
-        # 'eps_dispersion',       # BACKLOG: leakage risk — forward-filled end-of-quarter revision stat
+        'eps_rev_30_pct',         # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_rev_7_pct',          # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_breadth_ratio_30',   # activated 2026-03-09 — monitor reference_no_shuffle F1 for leakage
+        'eps_dispersion',         # activated 2026-03-09
+        'eps_breadth_ratio_7',    # analyst conviction 7d — activated 2026-03-15
+        'log_analyst_count',      # log1p(analyst_count) — activated 2026-03-15
+        'eps_rev_accel',          # revision momentum (7d-30d) — activated 2026-03-15
 
         ##################################
         # Stock Momentum 
@@ -895,8 +910,19 @@ reference = {
     "embedded_dim": 128        # increased from 64 for model capacity
 }   # end PLTR_ref_param
 
-# Identical to reference but uses chronological (no-shuffle) train/test split — honest out-of-sample evaluation
-reference_no_shuffle = {**reference, "model_name": "ref_noshuf", "shuffle_splits": False}
+# Identical to reference but uses chronological (no-shuffle) train/test split — honest out-of-sample evaluation.
+# shuffle=True: mini-batch order is randomized within each epoch (no look-ahead — split is already frozen
+#   before DataLoader is created). Fixes gradient correlation from purely sequential batches.
+# Higher dropout + l2: extra regularization for cross-regime generalization (train=2021-2024, test=2025+).
+reference_no_shuffle = {
+    **reference,
+    "model_name":        "ref_noshuf",
+    "shuffle_splits":    False,       # keep chronological train/test split
+    "shuffle":           True,        # randomize mini-batch order within each epoch
+    "dropout_rate":      0.2,         # was 0.1 — more regularization
+    "l2_weight_decay":   3.2e-05,     # was 1.6e-05
+    "note":              "batch-shuffle+dropout0.2+L2x2 for cross-regime generalization",
+}
 
 # Multi-zone (MH) param set — same features as reference but with MZ-tuned capacity hyperparams.
 # Note: start_date kept at 2021-09-30 (PLTR data constraint).

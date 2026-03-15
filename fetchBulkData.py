@@ -2,6 +2,7 @@ import yfinance as yf
 import datetime
 from pandas import DataFrame
 import requests
+from requests.adapters import HTTPAdapter
 import pandas as pd
 import numpy as np
 import calendar
@@ -17,6 +18,43 @@ from alpha_vantage.fundamentaldata import FundamentalData
 from alpha_vantage.cryptocurrencies import CryptoCurrencies
 from dateutil.relativedelta import relativedelta
 import fetch_eps_estimates
+from trendConfig import config as _trendConfig
+
+# ── Network timeout helpers ───────────────────────────────────────────────────
+_FRED_TIMEOUT = 30   # seconds per FRED HTTP request
+_AV_TIMEOUT   = 30   # seconds per Alpha Vantage / FINRA request
+
+# ── Incremental fetch threshold ───────────────────────────────────────────────
+# If the most recent disk-cached data is within this many calendar days of
+# today, fetch only the missing delta rows instead of the full history.
+_INCREMENTAL_THRESHOLD = 7
+
+# ── Session-level in-memory API response cache ────────────────────────────────
+# Eliminates redundant network calls when multiple training runs share a Python
+# process (e.g. nightly_run.py iterating over 5 tickers × 15 horizons).
+# Keys: ('FRED', series_id, start_date) | ('AV_TS', feed_name) |
+#       ('FX', from, to) | ('FINRA',) | ('AAII',)
+_SESSION_CACHE: dict = {}
+
+def clear_session_cache() -> None:
+    """Clear the in-session API response cache (e.g. between test cases)."""
+    _SESSION_CACHE.clear()
+    print('[CACHE] Session cache cleared.')
+
+def _fred_session() -> requests.Session:
+    """Return a requests.Session that enforces _FRED_TIMEOUT on every call.
+
+    pandas_datareader.DataReader accepts a `session` kwarg for the FRED reader.
+    Monkeypatching session.get injects the timeout without touching pdr internals.
+    """
+    session = requests.Session()
+    _orig_get = session.get
+    session.get = lambda *a, **kw: _orig_get(
+        *a, **{**kw, 'timeout': kw.get('timeout', _FRED_TIMEOUT)}
+    )
+    return session
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 def find_next_trading_day_no_day_of_week(input_df: DataFrame, df: DataFrame):
     '''
@@ -276,10 +314,46 @@ def fetch_feed(base_url: str, params: dict[str, str], config):
 # Function to fetch Alpha Vantage Time Series Data
 #
 def get_Alpha_Vantage_timeseries_Data( ts: TimeSeries, df: DataFrame, feed_name: str, column_name: str, field_name: str):
-    data = ts.get_daily_adjusted(feed_name,outputsize= 'full')
-    
-    # Extract the 'Time Series FX (Daily)' part of the data
-    time_series = data[0]
+    _cache_key = ('AV_TS', feed_name)
+    if _cache_key in _SESSION_CACHE:
+        print(f'[CACHE HIT] AV TimeSeries {feed_name}')
+        time_series = _SESSION_CACHE[_cache_key]
+    else:
+        import fetch_cache as _fc
+        import datetime as _dt
+        _disk_key  = f'AV_TS_{feed_name}'
+        _disk_tier = 'macro'
+        _disk = _fc.load(_disk_key, _disk_tier)
+        if _disk is not None:
+            print(f'[CACHE HIT disk] AV TimeSeries {feed_name}')
+            _SESSION_CACHE[_cache_key] = _disk
+            time_series = _disk
+        else:
+            # ── incremental: use compact (last 100 days) if stale data exists ──
+            _stale_ts, _ = _fc.get_latest_stale(_disk_key, _disk_tier)
+            if _stale_ts is not None and _stale_ts:
+                _cached_max = max(_stale_ts.keys())   # 'YYYY-MM-DD' string
+                _today      = _dt.date.today().isoformat()
+                import calendar as _cal
+                _gap = (_dt.date.fromisoformat(_today) -
+                        _dt.date.fromisoformat(_cached_max)).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] AV TimeSeries {feed_name}: compact fetch')
+                    _compact = ts.get_daily_adjusted(feed_name, outputsize='compact')
+                    _new_dates = {d: v for d, v in _compact[0].items() if d > _cached_max}
+                    time_series = {**_stale_ts, **_new_dates}
+                    _SESSION_CACHE[_cache_key] = time_series
+                    _fc.save(_disk_key, _disk_tier, time_series)
+                else:
+                    data = ts.get_daily_adjusted(feed_name, outputsize='full')
+                    time_series = data[0]
+                    _SESSION_CACHE[_cache_key] = time_series
+                    _fc.save(_disk_key, _disk_tier, time_series)
+            else:
+                data = ts.get_daily_adjusted(feed_name, outputsize='full')
+                time_series = data[0]
+                _SESSION_CACHE[_cache_key] = time_series
+                _fc.save(_disk_key, _disk_tier, time_series)
 
     # Create a DataFrame from the extracted data
     new_df = pd.DataFrame({
@@ -294,6 +368,165 @@ def get_Alpha_Vantage_timeseries_Data( ts: TimeSeries, df: DataFrame, feed_name:
 
 ################################################
 # Function to fetch FRED data
+def _fetch_fred_series(series_id: str, start_date: str) -> pd.DataFrame:
+    """Fetch a FRED series via the official JSON API (api.stlouisfed.org).
+
+    Returns a DataFrame with a DatetimeIndex named 'DATE' and a single column
+    named series_id — matching the pandas_datareader.DataReader('fred') contract
+    so callers can remain unchanged.
+
+    Requires config['fred']['key'] to be set in trendConfig.py.
+    Register for free at https://fred.stlouisfed.org/docs/api/api_key.html
+    """
+    _cache_key = ('FRED', series_id, start_date)
+    if _cache_key in _SESSION_CACHE:
+        print(f'[CACHE HIT] FRED {series_id} start={start_date}')
+        return _SESSION_CACHE[_cache_key].copy()
+
+    import fetch_cache as _fc
+    import datetime as _dt
+    _disk_key = f'FRED_{series_id}_{start_date}'
+
+    # ── today's disk cache hit ────────────────────────────────────────────────
+    _disk = _fc.load(_disk_key, 'macro')
+    if _disk is not None:
+        print(f'[CACHE HIT disk] FRED {series_id} start={start_date}')
+        _SESSION_CACHE[_cache_key] = _disk.copy()
+        return _disk
+
+    # ── incremental: extend stale cache instead of full refetch ──────────────
+    _stale_df, _stale_date = _fc.get_latest_stale(_disk_key, 'macro')
+    if _stale_df is not None and not _stale_df.empty:
+        _cached_max = _stale_df.index.max().date()
+        _today      = _dt.date.today()
+        _gap        = (_today - _cached_max).days
+        if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+            _delta_start = (_cached_max + _dt.timedelta(days=1)).isoformat()
+            print(f'[CACHE INCREMENTAL] FRED {series_id}: fetching delta {_delta_start} → today')
+            _fred_key = _trendConfig.get('fred', {}).get('key', '')
+            _delta_resp = requests.get(
+                'https://api.stlouisfed.org/fred/series/observations',
+                params={
+                    'series_id':         series_id,
+                    'observation_start': _delta_start,
+                    'api_key':           _fred_key,
+                    'file_type':         'json',
+                },
+                timeout=_FRED_TIMEOUT,
+            )
+            if _delta_resp.ok:
+                _new_rows = []
+                for _obs in _delta_resp.json().get('observations', []):
+                    _v = _obs['value']
+                    _new_rows.append({
+                        'DATE':   pd.Timestamp(_obs['date']),
+                        series_id: float('nan') if _v == '.' else float(_v),
+                    })
+                if _new_rows:
+                    _delta_df = pd.DataFrame(_new_rows).set_index('DATE')
+                    result = pd.concat([_stale_df, _delta_df])
+                else:
+                    result = _stale_df   # no new rows (holiday/weekend)
+                _SESSION_CACHE[_cache_key] = result.copy()
+                _fc.save(_disk_key, 'macro', result)
+                return result
+
+    # ── full fetch ────────────────────────────────────────────────────────────
+    fred_key = _trendConfig.get('fred', {}).get('key', '')
+    if not fred_key:
+        raise ValueError(
+            "FRED API key missing. Add it to trendConfig.py under config['fred']['key']. "
+            "Free registration: https://fred.stlouisfed.org/docs/api/api_key.html"
+        )
+    url = 'https://api.stlouisfed.org/fred/series/observations'
+    params = {
+        'series_id':         series_id,
+        'observation_start': start_date,
+        'api_key':           fred_key,
+        'file_type':         'json',
+    }
+    resp = requests.get(url, params=params, timeout=_FRED_TIMEOUT)
+    resp.raise_for_status()
+    observations = resp.json().get('observations', [])
+    rows = []
+    for obs in observations:
+        val = obs['value']
+        if val == '.':   # FRED uses '.' for missing values
+            val = float('nan')
+        else:
+            val = float(val)
+        rows.append({'DATE': pd.Timestamp(obs['date']), series_id: val})
+    result = pd.DataFrame(rows).set_index('DATE')
+    _SESSION_CACHE[_cache_key] = result.copy()
+    _fc.save(_disk_key, 'macro', result)
+    return result
+
+
+def _fetch_finra_df() -> pd.DataFrame:
+    """Download FINRA margin statistics Excel and return as raw DataFrame.
+
+    Cached per session — the file rarely changes within a day.
+    Callers must apply date-filtering and column renaming before use.
+    """
+    _cache_key = ('FINRA',)
+    if _cache_key in _SESSION_CACHE:
+        print('[CACHE HIT] FINRA margin statistics')
+        return _SESSION_CACHE[_cache_key].copy()
+
+    import fetch_cache as _fc
+    _disk = _fc.load('FINRA_margin', 'macro')
+    if _disk is not None:
+        print('[CACHE HIT disk] FINRA margin statistics')
+        _SESSION_CACHE[_cache_key] = _disk.copy()
+        return _disk
+
+    url = 'https://www.finra.org/sites/default/files/2021-03/margin-statistics.xlsx'
+    try:
+        response = requests.get(url, timeout=_AV_TIMEOUT)
+        response.raise_for_status()
+        content_type = response.headers.get('Content-Type')
+        if content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            raise ValueError(f"Expected an Excel file, but got Content-Type: {content_type}")
+        result = pd.read_excel(BytesIO(response.content), engine='openpyxl')
+    except Exception as e:
+        import fetch_cache as _fc  # noqa: F811 (re-import safe)
+        _stale = _fc.load_stale('FINRA_margin', 'macro')
+        if _stale is not None:
+            _SESSION_CACHE[_cache_key] = _stale.copy()
+            return _stale
+        print(f"An error occurred getting FINRA data: {e}")
+        raise
+    _SESSION_CACHE[_cache_key] = result.copy()
+    _fc.save('FINRA_margin', 'macro', result)
+    return result
+
+
+def _fetch_aaii_df() -> pd.DataFrame:
+    """Read AAII sentiment CSV from local file and return as raw DataFrame.
+
+    Cached per session — avoids repeated file I/O + parsing across ticker loops.
+    Callers must apply date-filtering and column selection before use.
+    """
+    _cache_key = ('AAII',)
+    if _cache_key in _SESSION_CACHE:
+        print('[CACHE HIT] AAII sentiment CSV')
+        return _SESSION_CACHE[_cache_key].copy()
+
+    import fetch_cache as _fc
+    _disk = _fc.load('AAII_sentiment', 'macro')
+    if _disk is not None:
+        print('[CACHE HIT disk] AAII sentiment CSV')
+        _SESSION_CACHE[_cache_key] = _disk.copy()
+        return _disk
+
+    filepath = 'sentiment.csv'
+    result = pd.read_csv(filepath)
+    result = result.reset_index(drop=True)
+    _SESSION_CACHE[_cache_key] = result.copy()
+    _fc.save('AAII_sentiment', 'macro', result)
+    return result
+
+
 def get_FRED_Data( df: DataFrame, feed_name: str, start_date_timestamp: str):
     '''
         date_offset_type
@@ -302,8 +535,7 @@ def get_FRED_Data( df: DataFrame, feed_name: str, start_date_timestamp: str):
         week, quarter
     '''
     # Do stuff
-    data_source = 'fred'
-    new_df = pdr.DataReader(feed_name, data_source, start_date_timestamp)
+    new_df = _fetch_fred_series(feed_name, start_date_timestamp)
     
     # Convert the index into a column
     new_df = new_df.reset_index()             # this will get the date index into its own column
@@ -344,9 +576,8 @@ def get_FRED_data_with_date_offset( df: DataFrame, feed_name: str, start_date_ti
         week, quarter
     '''
     # Do stuff
-    data_source = 'fred'
-    new_df = pdr.DataReader(feed_name, data_source, start_date_timestamp)
-    
+    new_df = _fetch_fred_series(feed_name, start_date_timestamp)
+
     # Convert the index into a column
     new_df = new_df.reset_index()             # this will get the date index into its own column
     new_df.rename(columns={'DATE': 'date'}, inplace=True)    # date col heading has the wrong case
@@ -366,9 +597,8 @@ def get_FRED_data_month_week_days_of_week( df: DataFrame, feed_name: str, start_
         For GDP, offset by 5 months, 1 week, then find the next friday
     '''
     # Do stuff
-    data_source = 'fred'
-    new_df = pdr.DataReader(feed_name, data_source, start_date_timestamp)
-    
+    new_df = _fetch_fred_series(feed_name, start_date_timestamp)
+
     # Convert the index into a column
     new_df = new_df.reset_index()             # this will get the date index into its own column
     new_df.rename(columns={'DATE': 'date'}, inplace=True)    # date col heading has the wrong case
@@ -620,9 +850,10 @@ def get_historical_cp_ratios(symbol, dates_df, api_key):
                     "symbol": symbol,
                     "date": date_str,
                     "apikey": api_key
-                }
+                },
+                timeout=_AV_TIMEOUT,
             )
-            
+
             data = response.json()
             
             if "data" in data and data["data"]:
@@ -704,9 +935,10 @@ def get_historical_cp_ratios_with_sentiments_OLD(symbol, dates_df, api_key):
                     "symbol": symbol,
                     "date": date_str,
                     "apikey": api_key
-                }
+                },
+                timeout=_AV_TIMEOUT,
             )
-            
+
             data = response.json()
             
             # Initialize row with zeros and default values
@@ -854,7 +1086,8 @@ def get_historical_cp_ratios_with_sentiments(symbol, dates_df, api_key):
                     "symbol": symbol,
                     "date": date_str,
                     "apikey": api_key
-                }
+                },
+                timeout=_AV_TIMEOUT,
             )
             
             options_data = options_response.json()
@@ -868,7 +1101,8 @@ def get_historical_cp_ratios_with_sentiments(symbol, dates_df, api_key):
                     "outputsize": "compact",
                     "apikey": api_key,
                     "datatype": "json"
-                }
+                },
+                timeout=_AV_TIMEOUT,
             )
             
             stock_data = stock_response.json()
@@ -1085,9 +1319,10 @@ def get_historical_cp_ratios_with_sentiments_new_OLD(symbol, dates_df, api_key):
                     "symbol": symbol,
                     "date": date_str,
                     "apikey": api_key
-                }
+                },
+                timeout=_AV_TIMEOUT,
             )
-            
+
             data = response.json()
             
             # Initialize row with zeros and default values
@@ -1220,14 +1455,22 @@ def clean_cp_ratio_file(symbol):
         df = pd.read_csv(file_path)
         original_count = len(df)
         
-        # Check if the file has headers
-        if 'date' not in df.columns and df.shape[1] == 10:
-            # File doesn't have headers, assign them
-            df.columns = [
-                'date', 'call_volume', 'put_volume', 'call_oi', 'put_oi',
-                'cp_volume_ratio', 'cp_oi_ratio', 'daily_sentiment',
-                'bullish_volume', 'bearish_volume'
-            ]
+        # Check if the file has headers (legacy guard for pre-IV headerless files)
+        if 'date' not in df.columns and df.shape[1] in (10, 14):
+            # File doesn't have headers — assign based on column count
+            if df.shape[1] == 10:
+                df.columns = [
+                    'date', 'call_volume', 'put_volume', 'call_oi', 'put_oi',
+                    'cp_volume_ratio', 'cp_oi_ratio', 'daily_sentiment',
+                    'bullish_volume', 'bearish_volume'
+                ]
+            else:  # 14 columns — includes IV
+                df.columns = [
+                    'date', 'call_volume', 'put_volume', 'call_oi', 'put_oi',
+                    'cp_volume_ratio', 'cp_oi_ratio', 'daily_sentiment',
+                    'bullish_volume', 'bearish_volume',
+                    'iv_7d', 'iv_30d', 'iv_90d', 'iv_skew_30d', 'iv_term_ratio'
+                ]
         
         # Drop duplicates
         df = df.drop_duplicates(subset=['date'])
@@ -1337,7 +1580,8 @@ def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key, back
                     "symbol": symbol,
                     "date": date_str,
                     "apikey": api_key
-                }
+                },
+                timeout=_AV_TIMEOUT,
             )
 
             data = response.json()
@@ -1454,6 +1698,7 @@ def get_historical_cp_ratios_with_sentiments_new(symbol, dates_df, api_key, back
 
             # Save after every date
             results_df = results_df.drop_duplicates(subset=['date'])
+            results_df = results_df.reset_index(drop=True)
             results_df.to_csv(file_path, index=False)
             print(f"Saved data: {len(results_df)} total unique entries")
 
@@ -1503,29 +1748,68 @@ from requests.exceptions import RequestException  # Adjust this import based on 
 def fetch_with_retry(currency_from, currency_to, config, max_retries=10, sleep_time=300):
     """
     Fetch exchange rate data with retry logic
-    
+
     Args:
         currency_from: Source currency code (e.g., 'TWD')
         currency_to: Target currency code (e.g., 'USD')
         max_retries: Maximum number of retry attempts
         sleep_time: Time to sleep between retries in seconds (default: 300 = 5 minutes)
-    
+
     Returns:
         Exchange rate data if successful
-    
+
     Raises:
         Exception: If all retry attempts fail
     """
+    _cache_key = ('FX', currency_from, currency_to)
+    if _cache_key in _SESSION_CACHE:
+        print(f'[CACHE HIT] FX {currency_from}/{currency_to}')
+        return _SESSION_CACHE[_cache_key]
+
+    import fetch_cache as _fc
+    import datetime as _dt
+    _disk_key = f'FX_{currency_from}_{currency_to}'
+    _disk = _fc.load(_disk_key, 'macro')
+    if _disk is not None:
+        print(f'[CACHE HIT disk] FX {currency_from}/{currency_to}')
+        _SESSION_CACHE[_cache_key] = _disk
+        return _disk
+
+    # ── incremental: compact fetch if stale cache is close ───────────────────
+    _stale_fx, _ = _fc.get_latest_stale(_disk_key, 'macro')
+    if _stale_fx is not None:
+        _stale_data = _stale_fx[0]   # (data_dict, metadata_dict)
+        if _stale_data:
+            _cached_max = max(_stale_data.keys())
+            _gap = (_dt.date.today() - _dt.date.fromisoformat(_cached_max)).days
+            if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                print(f'[CACHE INCREMENTAL] FX {currency_from}/{currency_to}: compact fetch')
+                _fx_obj = ForeignExchange(key=config["alpha_vantage"]["key"])
+                try:
+                    _compact = _fx_obj.get_currency_exchange_daily(
+                        currency_from, currency_to, outputsize='compact'
+                    )
+                    _new_dates = {d: v for d, v in _compact[0].items()
+                                  if d > _cached_max}
+                    _merged = (_stale_fx[0] | _new_dates, _stale_fx[1])
+                    _SESSION_CACHE[_cache_key] = _merged
+                    _fc.save(_disk_key, 'macro', _merged)
+                    return _merged
+                except Exception as _e:
+                    print(f'[CACHE] FX incremental failed ({_e}), falling back to full fetch')
+
     fx_data = ForeignExchange(key=config["alpha_vantage"]["key"])
     retry_count = 0
-    
+
     while retry_count < max_retries:
         try:
             # Attempt to fetch the exchange rate data
             exchange_rate = fx_data.get_currency_exchange_daily(
                 currency_from, currency_to, outputsize='full'
             )
-            # If successful, return the data
+            # If successful, cache and return the data
+            _SESSION_CACHE[_cache_key] = exchange_rate
+            _fc.save(_disk_key, 'macro', exchange_rate)
             return exchange_rate
             
         except Exception as e:
@@ -1701,7 +1985,7 @@ def fetch_next_report_timing(symbol, api_key):
             f"https://www.alphavantage.co/query?function=EARNINGS_CALENDAR"
             f"&symbol={symbol}&horizon=3month&apikey={api_key}"
         )
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=_AV_TIMEOUT)
         if resp.status_code == 200 and resp.content:
             df_ec = pd.read_csv(StringIO(resp.text))
             if 'symbol' in df_ec.columns and 'reportDate' in df_ec.columns and 'timeOfTheDay' in df_ec.columns:
@@ -1723,10 +2007,20 @@ def fetch_next_report_timing(symbol, api_key):
         print(f">  [AV] EARNINGS_CALENDAR timing fetch failed for {symbol}: {e}")
 
     # 2. yfinance — timezone-aware index encodes report time
+    # Suppress yfinance's own logger during this call to avoid noisy
+    # "possibly delisted; no earnings dates found" ERROR lines when the
+    # Yahoo earnings calendar endpoint is temporarily unavailable.
     try:
         import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        ed = ticker.get_earnings_dates(limit=10)
+        import logging as _logging
+        _yf_logger = _logging.getLogger('yfinance')
+        _prev_level = _yf_logger.level
+        _yf_logger.setLevel(_logging.CRITICAL)
+        try:
+            ticker = yf.Ticker(symbol)
+            ed = ticker.get_earnings_dates(limit=10)
+        finally:
+            _yf_logger.setLevel(_prev_level)
         if ed is not None and not ed.empty:
             today = pd.Timestamp.today().normalize()
             upcoming = ed[pd.to_datetime(ed.index).normalize() >= today]
@@ -1753,13 +2047,26 @@ def fetch_next_report_date(symbol, api_key):
       2. yfinance ticker.calendar
     Returns a pd.Timestamp, or None if both fail.
     """
+    _nrd_skey = ('NRD', symbol)
+    if _nrd_skey in _SESSION_CACHE:
+        print(f'[CACHE HIT] NRD {symbol}')
+        return _SESSION_CACHE[_nrd_skey]
+    import fetch_cache as _fc
+    _nrd_disk = _fc.load(f'NRD_{symbol}', 'symbol')
+    if _nrd_disk is not None:
+        print(f'[CACHE HIT disk] NRD {symbol}')
+        _SESSION_CACHE[_nrd_skey] = _nrd_disk
+        return _nrd_disk
+
+    nrd = None
+
     # 1. Alpha Vantage EARNINGS_CALENDAR
     try:
         url = (
             f"https://www.alphavantage.co/query?function=EARNINGS_CALENDAR"
             f"&symbol={symbol}&horizon=3month&apikey={api_key}"
         )
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, timeout=_AV_TIMEOUT)
         if resp.status_code == 200 and resp.content:
             from io import StringIO
             df_ec = pd.read_csv(StringIO(resp.text))
@@ -1773,31 +2080,31 @@ def fetch_next_report_date(symbol, api_key):
                     if not upcoming.empty:
                         nrd = upcoming.iloc[0]['reportDate']
                         print(f">  [AV] Next earnings for {symbol}: {nrd.date()}")
-                        return nrd
     except Exception as e:
         print(f">  [AV] EARNINGS_CALENDAR fetch failed for {symbol}: {e}")
 
-    # 2. yfinance
-    try:
-        import yfinance as yf
-        ticker = yf.Ticker(symbol)
-        cal = ticker.calendar
-        if cal is not None:
-            # yfinance >= 0.2 returns a dict; older returns a DataFrame
-            if isinstance(cal, dict) and 'Earnings Date' in cal:
-                dates = cal['Earnings Date']
-                if dates:
-                    nrd = pd.to_datetime(dates[0])
+    # 2. yfinance (fallback)
+    if nrd is None:
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            cal = ticker.calendar
+            if cal is not None:
+                # yfinance >= 0.2 returns a dict; older returns a DataFrame
+                if isinstance(cal, dict) and 'Earnings Date' in cal:
+                    dates = cal['Earnings Date']
+                    if dates:
+                        nrd = pd.to_datetime(dates[0])
+                        print(f">  [yfinance] Next earnings for {symbol}: {nrd.date()}")
+                elif hasattr(cal, 'loc') and 'Earnings Date' in cal.index:
+                    nrd = pd.to_datetime(cal.loc['Earnings Date'].iloc[0])
                     print(f">  [yfinance] Next earnings for {symbol}: {nrd.date()}")
-                    return nrd
-            elif hasattr(cal, 'loc') and 'Earnings Date' in cal.index:
-                nrd = pd.to_datetime(cal.loc['Earnings Date'].iloc[0])
-                print(f">  [yfinance] Next earnings for {symbol}: {nrd.date()}")
-                return nrd
-    except Exception as e:
-        print(f">  [yfinance] earnings fetch failed for {symbol}: {e}")
+        except Exception as e:
+            print(f">  [yfinance] earnings fetch failed for {symbol}: {e}")
 
-    return None
+    _fc.save(f'NRD_{symbol}', 'symbol', nrd)
+    _SESSION_CACHE[_nrd_skey] = nrd
+    return nrd
 
 
 ################################################
@@ -1832,30 +2139,8 @@ def fetch_all_data(config, param):
     ####################
     # GET FINRA DATA
     #
-    # URL of the .XLS file
-
     print('>Get FINRA Data')
-    url = 'https://www.finra.org/sites/default/files/2021-03/margin-statistics.xlsx'
-
-    try:
-        # Fetch the content of the URL
-        response = requests.get(url)
-        response.raise_for_status()  # Check for HTTP errors
-
-        # Verify the content is an Excel file
-        content_type = response.headers.get('Content-Type')
-        if content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
-            raise ValueError(f"Expected an Excel file, but got Content-Type: {content_type}")
-
-        # Read the Excel file into a DataFrame using 'openpyxl' engine
-        finra_df = pd.read_excel(BytesIO(response.content), engine='openpyxl')
-
-        # Display the DataFrame
-        # print(finra_df.head())
-
-    except Exception as e:
-        print(f"An error occurred getting FINRA data: {e}")
-
+    finra_df = _fetch_finra_df()
     finra_df.rename(columns={'Year-Month': 'date', "Debit Balances in Customers' Securities Margin Accounts": 'FINRA_debit'}, inplace=True)
     # Convert 'date' column to datetime; day defaults to 1
     # Convert the 'date' column to datetime format
@@ -1926,44 +2211,10 @@ def fetch_all_data(config, param):
 
     # get AAII survey data
     print('>Get AAII Data')
-    url = 'https://www.aaii.com/files/surveys/sentiment.csv'  # Changed URL to CSV
-
-    filepath = 'sentiment.csv'  # Changed file extension to CSV
-
-    # Use pandas read_csv instead of read_excel
-    # Since CSV already has a header row, don't skip rows with header parameter
-    aaii_df = pd.read_csv(filepath)
-    
-    # Check column names to debug
-    # print(f"Columns in the dataframe: {aaii_df.columns.tolist()}")
-    
-    # Make sure 'Date' exists before renaming
-    # if 'Date' in aaii_df.columns:
-    #     aaii_df.rename(columns={'Date': 'date'}, inplace=True)
-    # else:
-    #     # If 'Date' doesn't exist, try to find a date column
-    #     date_columns = [col for col in aaii_df.columns if 'date' in col.lower()]
-    #     if date_columns:
-    #         # Use the first column that might be a date
-    #         aaii_df.rename(columns={date_columns[0]: 'date'}, inplace=True)
-    #     else:
-    #         # If no date column found, let's assume the first column is the date
-    #         aaii_df.rename(columns={aaii_df.columns[0]: 'date'}, inplace=True)
-    #         print(f"No date column found. Using {aaii_df.columns[0]} as date.")
-    
-    # # Drop rows where date conversion fails
-    # aaii_df = aaii_df[pd.to_datetime(aaii_df['date'], errors='coerce').notna()]    
-
-    # Reset the index
-    aaii_df = aaii_df.reset_index(drop=True)
-
-    # except Exception as e:
-    #     print(f"An error occurred getting AAII data: {e}")
-    #     raise  # Re-raise to see the full traceback
+    aaii_df = _fetch_aaii_df()
 
     # Convert the 'date' column to datetime format - adjusting for MM-DD-YY format
     aaii_df['date'] = pd.to_datetime(aaii_df['date'], format='%m-%d-%y', errors='coerce')
-    # print(f"Date column after conversion: {aaii_df['date'].head()}")
 
     # Check if required columns exist
     required_columns = ['Bullish', 'Bearish', 'Spread']
@@ -1971,15 +2222,12 @@ def fetch_all_data(config, param):
     if missing_columns:
         print(f"Warning: Missing required columns: {missing_columns}")
         print(f"Available columns: {aaii_df.columns.tolist()}")
-        # Try to find similar column names
         for missing_col in missing_columns:
             potential_matches = [col for col in aaii_df.columns if missing_col.lower() in col.lower()]
             if potential_matches:
                 print(f"Potential matches for '{missing_col}': {potential_matches}")
-                # Use the first match
                 aaii_df.rename(columns={potential_matches[0]: missing_col}, inplace=True)
 
-    # Keep only the required columns, but check if they exist first
     cols_to_keep = ['date']
     for col in required_columns:
         if col in aaii_df.columns:
@@ -1990,8 +2238,7 @@ def fetch_all_data(config, param):
 
     # Filter the DataFrame to eliminate rows before the target date
     start_date_timestamp = param['start_date']
-
-    target_date = pd.to_datetime(start_date_timestamp)       
+    target_date = pd.to_datetime(start_date_timestamp)
     aaii_df = aaii_df[aaii_df['date'] >= target_date]
     aaii_df['date'] = aaii_df['date'].dt.strftime('%Y-%m-%d')   # needed before a merge
     df = merge_feed_data_frame(df, aaii_df)
@@ -2272,9 +2519,31 @@ def fetch_all_data(config, param):
     ti = TechIndicators(key=config["alpha_vantage"]["key"])
 
     # use the BTC stock
-    macd_data, MACD_meta_data = ti.get_macdext(symbol, interval='daily', series_type='close',
-                    fastperiod=None, slowperiod=None, signalperiod=None, fastmatype=None,
-                    slowmatype=None, signalmatype=None)
+    _macd_skey = ('TI_MACD', symbol)
+    if _macd_skey in _SESSION_CACHE:
+        print(f'[CACHE HIT] MACD {symbol}')
+        macd_data = _SESSION_CACHE[_macd_skey]
+    else:
+        import fetch_cache as _fc
+        _macd_disk = _fc.load(f'TI_MACD_{symbol}', 'symbol')
+        if _macd_disk is not None:
+            print(f'[CACHE HIT disk] MACD {symbol}')
+            macd_data = _macd_disk
+        else:
+            import datetime as _dt
+            _macd_stale, _ = _fc.get_latest_stale(f'TI_MACD_{symbol}', 'symbol')
+            macd_data = None
+            if _macd_stale is not None and _macd_stale:
+                _gap = (_dt.date.today() - _dt.date.fromisoformat(max(_macd_stale.keys()))).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] MACD {symbol}: reusing stale (gap={_gap}d)')
+                    macd_data = _macd_stale
+            if macd_data is None:
+                macd_data, _macd_meta = ti.get_macdext(symbol, interval='daily', series_type='close',
+                                fastperiod=None, slowperiod=None, signalperiod=None, fastmatype=None,
+                                slowmatype=None, signalmatype=None)
+            _fc.save(f'TI_MACD_{symbol}', 'symbol', macd_data)
+        _SESSION_CACHE[_macd_skey] = macd_data
     # Extracting date and MACD_Signal
     extracted_macd = [{'date': date, 'MACD_Signal': values['MACD_Signal']} 
              for date, values in macd_data.items()]
@@ -2303,8 +2572,30 @@ def fetch_all_data(config, param):
     
     # ti = TechIndicators(key=config["alpha_vantage"]["key"])
     print('>Get ATR for symbol= ', symbol)
-    
-    atr_data, atr_meta_data = ti.get_atr(symbol, interval='daily', time_period=14)
+
+    _atr_skey = ('TI_ATR', symbol)
+    if _atr_skey in _SESSION_CACHE:
+        print(f'[CACHE HIT] ATR {symbol}')
+        atr_data = _SESSION_CACHE[_atr_skey]
+    else:
+        import fetch_cache as _fc
+        _atr_disk = _fc.load(f'TI_ATR_{symbol}', 'symbol')
+        if _atr_disk is not None:
+            print(f'[CACHE HIT disk] ATR {symbol}')
+            atr_data = _atr_disk
+        else:
+            import datetime as _dt
+            _atr_stale, _ = _fc.get_latest_stale(f'TI_ATR_{symbol}', 'symbol')
+            atr_data = None
+            if _atr_stale is not None and _atr_stale:
+                _gap = (_dt.date.today() - _dt.date.fromisoformat(max(_atr_stale.keys()))).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] ATR {symbol}: reusing stale (gap={_gap}d)')
+                    atr_data = _atr_stale
+            if atr_data is None:
+                atr_data, _atr_meta = ti.get_atr(symbol, interval='daily', time_period=14)
+            _fc.save(f'TI_ATR_{symbol}', 'symbol', atr_data)
+        _SESSION_CACHE[_atr_skey] = atr_data
     # Extracting date and atr
     # Extracting 'Technical Analysis: ATR' part
     # Convert to DataFrame
@@ -2325,8 +2616,30 @@ def fetch_all_data(config, param):
     # ti = TechIndicators(key=config["alpha_vantage"]["key"])
 
     print('>Get RSI for symbol= ', symbol)
-    
-    rsi_data, rsi_meta_data = ti.get_rsi(symbol, interval='daily', time_period=20, series_type='close')
+
+    _rsi_skey = ('TI_RSI', symbol)
+    if _rsi_skey in _SESSION_CACHE:
+        print(f'[CACHE HIT] RSI {symbol}')
+        rsi_data = _SESSION_CACHE[_rsi_skey]
+    else:
+        import fetch_cache as _fc
+        _rsi_disk = _fc.load(f'TI_RSI_{symbol}', 'symbol')
+        if _rsi_disk is not None:
+            print(f'[CACHE HIT disk] RSI {symbol}')
+            rsi_data = _rsi_disk
+        else:
+            import datetime as _dt
+            _rsi_stale, _ = _fc.get_latest_stale(f'TI_RSI_{symbol}', 'symbol')
+            rsi_data = None
+            if _rsi_stale is not None and _rsi_stale:
+                _gap = (_dt.date.today() - _dt.date.fromisoformat(max(_rsi_stale.keys()))).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] RSI {symbol}: reusing stale (gap={_gap}d)')
+                    rsi_data = _rsi_stale
+            if rsi_data is None:
+                rsi_data, _rsi_meta = ti.get_rsi(symbol, interval='daily', time_period=14, series_type='close')
+            _fc.save(f'TI_RSI_{symbol}', 'symbol', rsi_data)
+        _SESSION_CACHE[_rsi_skey] = rsi_data
     # Extracting date and atr
     # Extracting 'Technical Analysis: ATR' part
     # Convert to DataFrame
@@ -2361,11 +2674,33 @@ def fetch_all_data(config, param):
     #
     # ti = TechIndicators(key=config["alpha_vantage"]["key"])
     print('>Get SnP Oscilator by using SPY')
-    
-    stoch_data, stoch_meta_data = ti.get_stoch('SPY', interval='daily', fastkperiod=0,
-                  slowkperiod=0, slowdperiod=None, slowkmatype=0, slowdmatype=0)
-    
-    extracted_stoch = [{'date': date, 'SPY_stoch': values['SlowK']} 
+
+    _spy_skey = ('TI_STOCH', 'SPY')
+    if _spy_skey in _SESSION_CACHE:
+        print('[CACHE HIT] Stoch SPY')
+        stoch_data = _SESSION_CACHE[_spy_skey]
+    else:
+        import fetch_cache as _fc
+        _spy_disk = _fc.load('TI_STOCH_SPY', 'macro')
+        if _spy_disk is not None:
+            print('[CACHE HIT disk] Stoch SPY')
+            stoch_data = _spy_disk
+        else:
+            import datetime as _dt
+            _spy_stale, _ = _fc.get_latest_stale('TI_STOCH_SPY', 'macro')
+            stoch_data = None
+            if _spy_stale is not None and _spy_stale:
+                _gap = (_dt.date.today() - _dt.date.fromisoformat(max(_spy_stale.keys()))).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] Stoch SPY: reusing stale (gap={_gap}d)')
+                    stoch_data = _spy_stale
+            if stoch_data is None:
+                stoch_data, _stoch_meta = ti.get_stoch('SPY', interval='daily', fastkperiod=None,
+                              slowkperiod=None, slowdperiod=None, slowkmatype=0, slowdmatype=0)
+            _fc.save('TI_STOCH_SPY', 'macro', stoch_data)
+        _SESSION_CACHE[_spy_skey] = stoch_data
+
+    extracted_stoch = [{'date': date, 'SPY_stoch': values['SlowK']}
              for date, values in stoch_data.items()]
     # Creating a DataFrame
     stoch_df = pd.DataFrame(extracted_stoch)
@@ -2377,10 +2712,33 @@ def fetch_all_data(config, param):
     #
 
     print('>Get SnP Oscilator by using QQQ')
-   
-    stoch_data, stoch_meta_data = ti.get_stoch('QQQ', interval='daily', fastkperiod=None,
-                  slowkperiod=None, slowdperiod=None, slowkmatype=0, slowdmatype=0)
-    extracted_stoch = [{'date': date, 'QQQ_stoch': values['SlowK']} 
+
+    _qqq_skey = ('TI_STOCH', 'QQQ')
+    if _qqq_skey in _SESSION_CACHE:
+        print('[CACHE HIT] Stoch QQQ')
+        stoch_data = _SESSION_CACHE[_qqq_skey]
+    else:
+        import fetch_cache as _fc
+        _qqq_disk = _fc.load('TI_STOCH_QQQ', 'macro')
+        if _qqq_disk is not None:
+            print('[CACHE HIT disk] Stoch QQQ')
+            stoch_data = _qqq_disk
+        else:
+            import datetime as _dt
+            _qqq_stale, _ = _fc.get_latest_stale('TI_STOCH_QQQ', 'macro')
+            stoch_data = None
+            if _qqq_stale is not None and _qqq_stale:
+                _gap = (_dt.date.today() - _dt.date.fromisoformat(max(_qqq_stale.keys()))).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] Stoch QQQ: reusing stale (gap={_gap}d)')
+                    stoch_data = _qqq_stale
+            if stoch_data is None:
+                stoch_data, _stoch_meta = ti.get_stoch('QQQ', interval='daily', fastkperiod=None,
+                              slowkperiod=None, slowdperiod=None, slowkmatype=0, slowdmatype=0)
+            _fc.save('TI_STOCH_QQQ', 'macro', stoch_data)
+        _SESSION_CACHE[_qqq_skey] = stoch_data
+
+    extracted_stoch = [{'date': date, 'QQQ_stoch': values['SlowK']}
              for date, values in stoch_data.items()]
     # Creating a DataFrame
     stoch_df = pd.DataFrame(extracted_stoch)
@@ -2390,10 +2748,33 @@ def fetch_all_data(config, param):
     # now get Stochastic Oscillator (for Russell Oscilator by using VTWO) from Alpha Vantage
     #
     print('>Get SnP Oscilator by using VTWO (Russell)')
-  
-    stoch_data, stoch_meta_data = ti.get_stoch('VTWO', interval='daily', fastkperiod=None,
-                  slowkperiod=None, slowdperiod=None, slowkmatype=0, slowdmatype=0)
-    extracted_stoch = [{'date': date, 'VTWO_stoch': values['SlowK']} 
+
+    _vtwo_skey = ('TI_STOCH', 'VTWO')
+    if _vtwo_skey in _SESSION_CACHE:
+        print('[CACHE HIT] Stoch VTWO')
+        stoch_data = _SESSION_CACHE[_vtwo_skey]
+    else:
+        import fetch_cache as _fc
+        _vtwo_disk = _fc.load('TI_STOCH_VTWO', 'macro')
+        if _vtwo_disk is not None:
+            print('[CACHE HIT disk] Stoch VTWO')
+            stoch_data = _vtwo_disk
+        else:
+            import datetime as _dt
+            _vtwo_stale, _ = _fc.get_latest_stale('TI_STOCH_VTWO', 'macro')
+            stoch_data = None
+            if _vtwo_stale is not None and _vtwo_stale:
+                _gap = (_dt.date.today() - _dt.date.fromisoformat(max(_vtwo_stale.keys()))).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] Stoch VTWO: reusing stale (gap={_gap}d)')
+                    stoch_data = _vtwo_stale
+            if stoch_data is None:
+                stoch_data, _stoch_meta = ti.get_stoch('VTWO', interval='daily', fastkperiod=None,
+                              slowkperiod=None, slowdperiod=None, slowkmatype=0, slowdmatype=0)
+            _fc.save('TI_STOCH_VTWO', 'macro', stoch_data)
+        _SESSION_CACHE[_vtwo_skey] = stoch_data
+
+    extracted_stoch = [{'date': date, 'VTWO_stoch': values['SlowK']}
              for date, values in stoch_data.items()]
     # Creating a DataFrame
     stoch_df = pd.DataFrame(extracted_stoch)
@@ -2510,7 +2891,32 @@ def fetch_all_data(config, param):
         time_period = params['bband_time_period']
     else:
         time_period = 20    # default to 20
-    data, bband_meta_data = ti.get_bbands(symbol, interval='daily', time_period= time_period, series_type= 'close', nbdevup=None, nbdevdn=None, matype=None)
+
+    _bb_skey = ('TI_BBANDS', symbol, time_period, 'ema')
+    if _bb_skey in _SESSION_CACHE:
+        print(f'[CACHE HIT] BBands {symbol} tp={time_period}')
+        data = _SESSION_CACHE[_bb_skey]
+    else:
+        import fetch_cache as _fc
+        _bb_disk = _fc.load(f'TI_BBANDS_{symbol}_{time_period}_ema', 'symbol')
+        if _bb_disk is not None:
+            print(f'[CACHE HIT disk] BBands {symbol} tp={time_period}')
+            data = _bb_disk
+        else:
+            import datetime as _dt
+            _bb_stale, _ = _fc.get_latest_stale(f'TI_BBANDS_{symbol}_{time_period}_ema', 'symbol')
+            data = None
+            if _bb_stale is not None and _bb_stale:
+                _gap = (_dt.date.today() - _dt.date.fromisoformat(max(_bb_stale.keys()))).days
+                if 0 < _gap <= _INCREMENTAL_THRESHOLD:
+                    print(f'[CACHE INCREMENTAL] BBands {symbol} tp={time_period}: reusing stale (gap={_gap}d)')
+                    data = _bb_stale
+            if data is None:
+                # matype=1 = EMA basis (more responsive than SMA for 1-15d horizon)
+                data, _bb_meta = ti.get_bbands(symbol, interval='daily', time_period=time_period,
+                                               series_type='close', nbdevup=None, nbdevdn=None, matype=1)
+            _fc.save(f'TI_BBANDS_{symbol}_{time_period}_ema', 'symbol', data)
+        _SESSION_CACHE[_bb_skey] = data
     
     # Convert the nested dictionary to DataFrame
     bband_df = pd.DataFrame.from_dict(data, orient='index')  # Keys become index, columns are the inner keys
@@ -2540,8 +2946,21 @@ def fetch_all_data(config, param):
     # 3. then look for the next trade date and line them up.
     #
     if params.get('symbol') != 'QQQ':
-        fd = FundamentalData(key=config["alpha_vantage"]["key"])
-        income_data = fd.get_income_statement_quarterly(symbol)
+        _inc_skey = ('FD_INCOME', symbol)
+        if _inc_skey in _SESSION_CACHE:
+            print(f'[CACHE HIT] Income statement {symbol}')
+            income_data = _SESSION_CACHE[_inc_skey]
+        else:
+            import fetch_cache as _fc
+            _inc_disk = _fc.load(f'FD_INCOME_{symbol}', 'symbol')
+            if _inc_disk is not None:
+                print(f'[CACHE HIT disk] Income statement {symbol}')
+                income_data = _inc_disk
+            else:
+                fd = FundamentalData(key=config["alpha_vantage"]["key"])
+                income_data = fd.get_income_statement_quarterly(symbol)
+                _fc.save(f'FD_INCOME_{symbol}', 'symbol', income_data)
+            _SESSION_CACHE[_inc_skey] = income_data
         # Convert the list of lists into a DataFrame, using the first row as column names
         # Extract the array part (assuming it's the first element)
         data_array = income_data[0]
@@ -2568,10 +2987,24 @@ def fetch_all_data(config, param):
         # Get EPS data
         #
         print('>Get EPS data for symbol= ', symbol)
-        report_time_map = {}   # {reportedDate str → is_bmo bool}; populated below
-        attempt = 0
-        max_attempts = 12
-        while attempt < max_attempts:
+        _earn_skey = ('AV_EARNINGS', symbol)
+        eps_df      = None
+        report_time_map = {}
+        if _earn_skey in _SESSION_CACHE:
+            print(f'[CACHE HIT] EARNINGS {symbol}')
+            eps_df, report_time_map = _SESSION_CACHE[_earn_skey]
+        else:
+            import fetch_cache as _fc
+            _earn_disk = _fc.load(f'AV_EARNINGS_{symbol}', 'symbol')
+            if _earn_disk is not None:
+                print(f'[CACHE HIT disk] EARNINGS {symbol}')
+                eps_df, report_time_map = _earn_disk
+                _SESSION_CACHE[_earn_skey] = (eps_df, report_time_map)
+        if eps_df is None:
+            import fetch_cache as _fc
+            attempt = 0
+            max_attempts = 12
+        while eps_df is None and attempt < max_attempts:
             params = {
                     "apikey": api_key,
                     "function": 'EARNINGS',
@@ -2579,7 +3012,7 @@ def fetch_all_data(config, param):
                     "symbol": symbol
                 }
             try:
-                response = requests.get(base_url, params=params, timeout=100)
+                response = requests.get(base_url, params=params, timeout=_AV_TIMEOUT)
                 if response.status_code == 200:
                     data = response.json()
                     # data = json.loads(json_data)
@@ -2623,6 +3056,10 @@ def fetch_all_data(config, param):
             attempt += 1
             if attempt < max_attempts:
                 time.sleep(300)
+        if _earn_skey not in _SESSION_CACHE and eps_df is not None:
+            import fetch_cache as _fc
+            _fc.save(f'AV_EARNINGS_{symbol}', 'symbol', (eps_df, report_time_map))
+            _SESSION_CACHE[_earn_skey] = (eps_df, report_time_map)
         # print(eps_df)
 
         # Ensure the date fields are in datetime format and normalize them
@@ -2911,17 +3348,15 @@ def fetch_all_data(config, param):
     # print('>Get SOX data')
     # df = get_yfinance_data( df, '^SOX', start_date_timestamp, 'SOX')
     
-    # First, clean the existing file
-    clean_cp_ratio_file(symbol)
-
     ####################################
     # get call/put ratio data
     # ASSUMPTION: for each symbol, there is already a preprocessed <symbol>_cp_ratios.csv file
     # this daily code will read that in, figure out what is missing from end date, and just fill those in
     #
     if 'cp_sentiment_ratio' in param['selected_columns'] and 'options_volume_ratio' not in param['selected_columns']:
-        # In this case use the old code without options ratio
-        # only process cp ratio if this stock is configured to use it
+        # Legacy path: cp_sentiment_ratio only (no options_volume_ratio).
+        # NOTE: No current ticker uses this path. If adding a new stock, include
+        # 'options_volume_ratio' in selected_columns to use the new path with IV support.
         print('>Get Call/Put ratio data (OLD WAY)')
         file_path = symbol + '-cp_ratios_sentiment.csv'
         if not os.path.isfile(file_path):
@@ -2936,13 +3371,11 @@ def fetch_all_data(config, param):
             df = df[df['date'] <= param['end_date']]
 
             # now we have to figure out the dates in master df
-            missing_dates = find_missing_dates(df, df_cp_ratios)  # Returns None (no missing dates in range)
-            
+            missing_dates = find_missing_dates(df, df_cp_ratios)  # Returns empty DataFrame when no dates are missing
+
             if not missing_dates.empty:
                 print('>> calculate new missing cp-ratios')
-                # result_df = get_historical_cp_ratios_with_sentiments(symbol, missing_dates, api_key)
                 result_df = get_historical_cp_ratios_with_sentiments_new(symbol, missing_dates, api_key)
-                result_df_copy = result_df.copy()
 
                 columns = ['date', 'cp_volume_ratio','cp_oi_ratio', 'bullish_volume', 'bearish_volume']
                 result_df = result_df[columns]
@@ -2963,22 +3396,12 @@ def fetch_all_data(config, param):
             def calculate_sentiment_ratio(row):
                 bullish = row['bullish_volume']
                 bearish = row['bearish_volume']
-                
-                # Case 1: Both are zero - sentiment is neutral
-                if bullish == 0 and bearish == 0:
-                    return 0.0
-                
-                # Case 2: Bullish is zero but bearish is not - extremely bearish
-                elif bullish == 0 and bearish > 0:
-                    return 0.0
-                
-                # Case 3: Bullish is positive but bearish is zero - extremely bullish
-                elif bullish > 0 and bearish == 0:
-                    return 3.0
-                
-                # Standard case: Normal ratio calculation
-                else:
-                    return bullish / bearish
+                total = bullish + bearish
+                # No options activity — unknown sentiment, not neutral
+                if total == 0:
+                    return np.nan
+                # Proportion of bullish (call) volume: 0.0 = all puts, 1.0 = all calls
+                return bullish / total
 
             # Apply the function to calculate the sentiment ratio
             df['cp_sentiment_ratio'] = df.apply(calculate_sentiment_ratio, axis=1)
@@ -3014,13 +3437,12 @@ def fetch_all_data(config, param):
                 df = df[df['date'] <= param['end_date']]
 
                 # now we have to figure out the dates in master df
-                missing_dates = find_missing_dates(df, df_cp_ratios)  # Returns None (no missing dates in range)
-                
+                missing_dates = find_missing_dates(df, df_cp_ratios)  # Returns empty DataFrame when no dates are missing
+
                 if not missing_dates.empty:
                     print('>> calculate new missing cp-ratios')
                     # result_df = get_historical_cp_ratios_with_sentiments(symbol, missing_dates, api_key)
                     result_df = get_historical_cp_ratios_with_sentiments_new(symbol, missing_dates, api_key)
-                    result_df_copy = result_df.copy()
 
                     all_cp_cols = ['date', 'call_volume', 'put_volume', 'cp_volume_ratio', 'cp_oi_ratio',
                                    'bullish_volume', 'bearish_volume',
@@ -3043,22 +3465,12 @@ def fetch_all_data(config, param):
                 def calculate_sentiment_ratio(row):
                     bullish = row['bullish_volume']
                     bearish = row['bearish_volume']
-                    
-                    # Case 1: Both are zero - sentiment is neutral
-                    if bullish == 0 and bearish == 0:
-                        return 0.0
-                    
-                    # Case 2: Bullish is zero but bearish is not - extremely bearish
-                    elif bullish == 0 and bearish > 0:
-                        return 0.0
-                    
-                    # Case 3: Bullish is positive but bearish is zero - extremely bullish
-                    elif bullish > 0 and bearish == 0:
-                        return 3.0
-                    
-                    # Standard case: Normal ratio calculation
-                    else:
-                        return bullish / bearish
+                    total = bullish + bearish
+                    # No options activity — unknown sentiment, not neutral
+                    if total == 0:
+                        return np.nan
+                    # Proportion of bullish (call) volume: 0.0 = all puts, 1.0 = all calls
+                    return bullish / total
 
                 # Apply the function to calculate the sentiment ratio
                 df['cp_sentiment_ratio'] = df.apply(calculate_sentiment_ratio, axis=1)
@@ -3066,9 +3478,13 @@ def fetch_all_data(config, param):
                 # Optional: Round the ratio to 2 decimal places for readability
                 df['cp_sentiment_ratio'] = df['cp_sentiment_ratio'].round(2)
 
-                # calculate volume ratio
-                df ['options_volume'] = df['call_volume'] + df['put_volume']
-                df['options_volume_ratio'] = df['options_volume'] / df['volume']
+                # calculate volume ratio — guard against zero/NaN stock volume
+                df['options_volume'] = df['call_volume'] + df['put_volume']
+                df['options_volume_ratio'] = np.where(
+                    df['volume'] > 0,
+                    df['options_volume'] / df['volume'],
+                    np.nan
+                )
 
                 # VALIDATION: Alert if options_volume_ratio is all zeros
                 non_zero_count = (df['options_volume_ratio'] > 0).sum()

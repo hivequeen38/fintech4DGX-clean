@@ -5,6 +5,22 @@ Prioritized by expected signal value for a 1–3 week horizon.
 
 ---
 
+## [TOP PRIORITY] In-Session Data Fetch Cache
+
+**Problem:** Every call to `fetch_all_data()` makes ~50–70 sequential API calls (Alpha Vantage,
+FRED, AAII, FINRA). In a full nightly run (15 tickers × 3 model types = 45 training runs),
+ticker-independent series like FRED macro, AAII sentiment, FINRA margin debt, SPY, QQQ, and
+VTWO are re-fetched from the network identically on every single run — potentially 40+ redundant
+fetches of the same data within one session.
+
+**Proposal:** Two-level cache to eliminate redundant fetches.
+
+**Design plan:** See `design_api_cache.md` (detailed plan — review before implementing).
+
+**Status:** PLANNED — see design doc.
+
+---
+
 ## Top 5 Priority Picks (highest expected SHAP, implement first)
 
 | # | Feature(s) | Category | Status |
@@ -29,21 +45,25 @@ is needed to activate them for training.
 **Active in all profiles for all tickers** (as of 2026-02-24):
 - `eps_est_avg` — raw AV consensus average EPS estimate (upcoming quarter, raw AV units)
 
-**Commented out (BACKLOG — leakage risk):**
-Forward-fill of end-of-quarter revision stats contaminates earlier months in each quarter.
-- `eps_rev_30_pct` — % revision in consensus over 30 days
-- `eps_rev_7_pct` — % revision in consensus over 7 days
-- `eps_breadth_ratio_30` — net analyst conviction, 30-day window
-- `eps_dispersion` — (high−low)/|avg|, analyst disagreement
+**Active in all profiles for all tickers** (as of 2026-03-15, leakage fixed):
+- `eps_rev_30_pct`, `eps_rev_7_pct`, `eps_breadth_ratio_30`, `eps_dispersion` — activated 2026-03-09, leakage-safe after 2026-03-15 fix
+- `eps_breadth_ratio_7`, `log_analyst_count`, `eps_rev_accel` — activated 2026-03-15
 
-### Tier 2 — Add after resolving leakage or validating on reference_no_shuffle
+**Leakage fix (2026-03-15):** `fetch_eps_estimates.py` `_build_anchor_series` now returns two anchor DataFrames. Estimate cols (`eps_est_avg`, `eps_est_analyst_count`, `log_analyst_count`) anchor at `report_date[i]`. Revision cols anchor at `report_date[i+1]` — they only become active once the quarter they describe has been reported, eliminating within-quarter look-ahead bias.
 
-| Feature | Formula / source | Notes |
-|---|---|---|
-| `eps_rev_accel` | `eps_rev_7_pct − eps_rev_30_pct` | Is revision momentum accelerating? Compute in `fetch_eps_estimates._compute_tier1_features` |
-| `eps_breadth_ratio_7` | `(up_7 − down_7) / (up_7 + down_7 + 1)` | Already computed, not yet in selected_columns |
-| `log_analyst_count` | `log1p(analyst_count)` | Coverage proxy (liquidity / attention). Already computed. |
-| `rev_rev_30_pct` | Same formula for revenue estimate avg | Needs `rev_est_avg_30d` field — AV doesn't return revenue revision history, only current avg. Skip for now. |
+### Tier 2 — COMPLETED 2026-03-15
+
+| Feature | Status |
+|---|---|
+| `eps_rev_accel` | Added to `_compute_tier1_features`; active in all profiles |
+| `eps_breadth_ratio_7` | Was already computed; added to all profiles |
+| `log_analyst_count` | Was already computed; added to all profiles |
+| `rev_rev_30_pct` | Skip — AV doesn't return revenue revision history |
+
+**VERIFY after Monday 2026-03-16 nightly run:**
+1. No KeyError / missing-column errors in nightly log for any ticker (new cols in TMP.csv)
+2. Check NVDA `reference_no_shuffle` F1 vs baseline — leakage fix should narrow any gap between shuffled and no-shuffle F1 on revision features
+3. Confirm `eps_rev_accel`, `eps_breadth_ratio_7`, `log_analyst_count` appear in SHAP output with non-trivial importance
 
 ### Tier 3 — Cross-features (after Tier 2 validated)
 
@@ -341,8 +361,112 @@ To activate any backlog feature:
 
 ---
 
+## B-MH5 — Trans-MZ Inference (enable MZ predictions in HTML report)
+
+**Status:** BUGS FIXED 2026-03-15 — will be confirmed working after next nightly run.
+
+**What was done:**
+- Added `make_inference_multi_horizon()` to `trendAnalysisFromTodayNew.py`
+- Added `trans_mz` branch to `mainDeltafromToday.inference()`
+- `processDeltaFromTodayResults()` now accepts `model_type` param (was hardcoded `'transformer'`)
+- Removed skip guard in `nightly_run.py` Phase 2 inference loop
+- 8 unit tests added in `test_mh_inference.py` — all passing
+
+**Bugs found and fixed 2026-03-15:**
+- `nightly_run.py` inference loop was not passing `model_type=mtype` → both NVDA/PLTR fell through to transformer path
+- `NVDA_param.mz_reference` was missing `model_name` key → KeyError; added `"model_name": "mz_reference"`
+- NVDA model file currently saved as `mh_mz_mh_...pth`; tonight's training will save under correct `mz_reference_mh_...pth` name; inference live from tomorrow night.
+
+---
+
+## Cache — Remaining Unimplemented Items
+
+Reviewed 2026-03-09. `fetch_cache.py`, session cache, disk cache for most data sources, TMP.csv
+freshness check, `purge_old_cache`, `timeout=30` on all requests — all **implemented**.
+Items below are what's still missing.
+
+---
+
+### C1. Create `incremental_fetch.py` — cache-aware entry point
+
+**Status:** NOT CREATED
+
+The design doc (`design_api_cache.md`) specifies a new file that exposes `warm_macro()`,
+`warm_symbol()`, `fetch_all_cached()`, and `clear_session_cache()`. Currently all cache logic
+is embedded directly inside `fetchBulkData.py` rather than behind a clean entry point.
+This is the primary architectural gap in the cache implementation.
+
+**Files to touch:** Create `/workspace/incremental_fetch.py`.
+
+---
+
+### C2. Phase 0 warm-up in `nightly_run.py`
+
+**Status:** NOT IMPLEMENTED
+
+The design requires an explicit pre-fetch phase at the start of the nightly run (before the
+inference loop) that calls `warm_macro()` and `warm_symbol()` for all tickers upfront.
+Currently the session cache (`_SESSION_CACHE`) prevents re-fetching within the same process,
+but cache population is reactive (first `fetch_all_data` call populates it) rather than
+proactive. With Phase 0, the very first inference call also benefits from cache.
+
+**Prerequisite:** C1 (`incremental_fetch.py`) must exist first.
+
+**Files to touch:** `/workspace/nightly_run.py` — add Phase 0 block before inference loop.
+
+---
+
+### C3. AV EARNINGS (EPS history) not disk-cached
+
+**Status:** IMPLEMENTED 2026-03-15
+
+- `fetchBulkData.py`: AV EARNINGS (`function=EARNINGS`) wrapped with session + disk cache.
+  Key `AV_EARNINGS_{symbol}`, tier `symbol`. Stores `(eps_df, report_time_map)` tuple.
+  While loop condition changed to `while eps_df is None and attempt < max_attempts:` to skip
+  on cache hit without re-indenting the loop body.
+- `fetch_eps_estimates.py`: `fetch_av_earnings_estimates()` wrapped with disk cache.
+  Key `AV_EPS_EST_{symbol}`, tier `symbol`. No session cache needed (called once per symbol).
+
+---
+
+### C4. yfinance next earnings date not cached
+
+**Status:** IMPLEMENTED 2026-03-15
+
+`fetch_next_report_date()` in `fetchBulkData.py` now uses session + disk cache.
+Key `NRD_{symbol}`, tier `symbol`. Refactored multiple early returns into single-return
+pattern to allow caching the result before returning. Both AV EARNINGS_CALENDAR and
+yfinance fallback paths now flow into one `_fc.save` + `_SESSION_CACHE` write.
+
+---
+
+### C5. Incremental delta fetch for technical indicators (BBands, MACD, ATR, RSI, Stochastics)
+
+**Status:** IMPLEMENTED 2026-03-15
+
+All 7 tech indicator blocks in `fetchBulkData.py` now use stale-reuse incremental pattern:
+MACD, ATR, RSI (per-symbol, tier='symbol'); Stoch SPY/QQQ/VTWO (tier='macro'); BBands
+(per-symbol + time_period, tier='symbol'). If disk cache misses but stale file exists with
+gap ≤ `_INCREMENTAL_THRESHOLD` (7 days), reuse stale dict and save as today's — skipping
+the API call entirely. Only falls back to full re-fetch when gap > 7 days or no stale file.
+
+---
+
+### C6. Deprecate / remove `fetchBulkDataCached.py`
+
+**Status:** FILE STILL EXISTS — pending deprecation
+
+The old `fetchBulkDataCached.py` was to be kept until `incremental_fetch.py` was validated
+in production, then removed. Since `incremental_fetch.py` was never created (C1), this
+is in limbo. Once C1 and C2 are validated in a nightly run, delete this file.
+
+**Files to touch:** Delete `/workspace/fetchBulkDataCached.py` after C1 is live.
+
+---
+
 ## Technical Debt / Code Review
 
 | Task | Priority | Notes |
 |---|---|---|
-| Code review CP Ratio code | Medium | Review `get_historical_cp_ratios_with_sentiments_new()` and all CP ratio processing in `fetchBulkData.py` for correctness, edge cases, and IV backfill behavior after IV feature addition |
+| Code review CP Ratio code | Medium | FIXED 2026-03-15 — **VERIFY after nightly run 2026-03-16**: (1) no index/overwrite errors in CP fetch loop, (2) no duplicate-clean errors, (3) `options_volume_ratio` validation passes for all tickers. Mark complete when run succeeds without CP-related errors. |
+| Review momentum indicator parameters (RSI, MACD, ATR, BBands, Stoch) | Medium | FIXED 2026-03-15 — **VERIFY after nightly run 2026-03-16**: (1) RSI changed 20→14: check RSI values look reasonable in TMP.csv (should be slightly more responsive); (2) BBands matype SMA→EMA (matype=1), cache key updated to `_ema` suffix — confirm BBands columns (Real Upper/Lower/Middle) still merge cleanly; (3) Stoch SPY `fastkperiod=0,slowkperiod=0` bug fixed to `None` — confirm SPY_stoch values are present and non-zero. MACD (12/26/9) and ATR (14) unchanged — correct as-is. |
