@@ -453,6 +453,15 @@ def DEPRECATED_download_data(config, param):
         df['ret_5d_rel_SMH']  = np.nan
         df['ret_10d_rel_SMH'] = np.nan
 
+    # 4. Overnight gap features
+    #    overnight_gap = (open(T) - close(T-1)) / close(T-1)
+    #    Captures overnight news shocks (earnings, guidance, macro) using existing OHLCV.
+    #    Rolling variants capture persistent gap bias and volatility regime.
+    df['overnight_gap'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['overnight_gap_5d_mean'] = df['overnight_gap'].rolling(5).mean()
+    df['overnight_gap_5d_std']  = df['overnight_gap'].rolling(5).std()
+    df['overnight_gap_5d_abs']  = df['overnight_gap'].abs().rolling(5).mean()
+
     # merge all the features together
     print("shape of feature data in a df: "+ str(df.shape))
     return df, num_data_points, display_date_range
@@ -761,12 +770,11 @@ def make_prediciton_test( model, raw_df: DataFrame, param: dict[str], currentDat
 
     model.eval()  # Set to evaluation mode
 
-    # If you're using a GPU
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
     model = model.to(device)
+    input_tensor = input_tensor.to(device)
 
     with torch.no_grad():
         # Generate predictions
@@ -1589,6 +1597,15 @@ def analyze_trend_multi_horizon(
 
 
 def load_data_to_cache(config: dict[str, str], param: dict[str]):
+    symbol   = param['symbol']
+    end_date = param.get('end_date', '')
+    tmp_path = f'{symbol}_TMP.csv'
+    if end_date and os.path.exists(tmp_path):
+        _cached = pd.read_csv(tmp_path)
+        if not _cached.empty and str(_cached['date'].max()) >= end_date:
+            print(f'[CACHE HIT] {tmp_path} already covers {end_date} — skipping data fetch')
+            return
+
     df, num_data_points, display_date_range = analysisUtil.download_data(config, param)    
     calculate_label(df, param)  # Call subroutine to calicalte the label 
     symbol = param['symbol']
@@ -1666,3 +1683,95 @@ def make_inference( config: dict[str, str], param: dict[str], current_day_offset
 
     make_prediciton_test(model, raw_df, param, currentDateTime, param['symbol'], incr_df)
 
+
+
+def make_inference_multi_horizon(
+    config: dict, param: dict, incr_df: DataFrame,
+    turn_random_on: bool, use_cached_data: bool, save_dir: str = None,
+):
+    """Run inference for a trained MultiHorizonTransformer (trans_mz model_type).
+
+    Loads the saved checkpoint + scaler, passes the most recent feature row
+    through the model, and writes p1..p15 class labels ('__', 'UP', 'DN')
+    into incr_df.  Returns the list of 15 label strings.
+
+    File conventions (must match analyze_trend_multi_horizon):
+        model:  model/model_{symbol}_{model_name}_mh_fixed_noTimesplit.pth
+        scaler: {symbol}_{model_name}_mh_scaler.joblib  (in CWD or save_dir)
+    """
+    random_seed = random.randint(0, 2**32 - 1) if turn_random_on else 42
+    random.seed(random_seed)
+    np.random.seed(random_seed)
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed_all(random_seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    symbol     = param['symbol']
+    model_name = param.get('model_name', 'mh_mz')
+
+    # --- Load data ---
+    if use_cached_data:
+        file_path = symbol + '_TMP.csv'
+        df = pd.read_csv(file_path)
+        print('> data loaded from cache')
+    else:
+        df = load_data_to_cache(config, param)
+
+    df = feature_value_override(df, param)
+
+    # --- Feature columns (exclude label) ---
+    feature_cols = [c for c in param['selected_columns'] if c != 'label']
+    feature_cols = [c for c in feature_cols if c in df.columns]
+
+    missing = [c for c in param['selected_columns'] if c != 'label' and c not in df.columns]
+    if missing:
+        raise ValueError(f"[{symbol}] make_inference_multi_horizon: features missing from TMP: {missing}")
+
+    # Use the most recent row for inference (today's data, no label needed)
+    last_features = df[feature_cols].iloc[[-1]].values  # (1, D)
+
+    # --- Load scaler ---
+    scaler_filename = f"{symbol}_{model_name}_mh_scaler.joblib"
+    scaler_path = os.path.join(save_dir, scaler_filename) if save_dir else scaler_filename
+    if not os.path.exists(scaler_path):
+        raise FileNotFoundError(
+            f"[{symbol}] MH scaler not found: {scaler_path}. Run training first.")
+    scaler = load(scaler_path)
+    last_features_scaled = scaler.transform(last_features)  # (1, D)
+
+    # --- Load checkpoint and reconstruct model ---
+    model_filename = f"model_{symbol}_{model_name}_mh_fixed_noTimesplit.pth"
+    model_path = os.path.join(save_dir, model_filename) if save_dir else os.path.join('model', model_filename)
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"[{symbol}] MH model checkpoint not found: {model_path}. Run training first.")
+
+    checkpoint   = torch.load(model_path, weights_only=False)
+    saved_config = checkpoint['config']
+
+    input_dim = last_features_scaled.shape[1]
+    model = build_model(saved_config, input_dim=input_dim, num_classes=3)
+    model.load_state_dict(checkpoint['state_dict'])
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
+    model.eval()
+
+    # --- Inference ---
+    input_tensor = torch.FloatTensor(last_features_scaled).to(device)  # (1, D)
+    with torch.no_grad():
+        outputs = model(input_tensor)                                        # (1, 15, 3)
+        probs   = torch.softmax(outputs, dim=-1)
+        preds   = torch.argmax(probs, dim=-1).squeeze(0).cpu().numpy()      # (15,)
+
+    class_labels = {0: '__', 1: 'UP', 2: 'DN'}
+    pred_labels  = [class_labels[int(p)] for p in preds]
+
+    # --- Write to incr_df ---
+    for i, label in enumerate(pred_labels):
+        incr_df[f'p{i + 1}'] = [label]
+
+    print(f"[{symbol} MH inference] checkpoint trained {checkpoint.get('train_date', 'unknown')}")
+    print(f"[{symbol} MH inference] predictions: {pred_labels}")
+    return pred_labels

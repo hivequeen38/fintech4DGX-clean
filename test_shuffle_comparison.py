@@ -9,6 +9,7 @@ Usage:
     /usr/bin/python3.10 test_shuffle_comparison.py
 """
 
+import os
 import sys
 import io
 import re
@@ -110,11 +111,10 @@ print(f"{'='*72}\n")
 base_param = copy.deepcopy(NVDA_param.reference)
 base_param['end_date'] = TEST_DATE
 
-print("Loading NVDA data into cache (once)...")
-buf = io.StringIO()
-with contextlib.redirect_stdout(buf):
-    trendAnalysisFromTodayNew.load_data_to_cache(trendConfig.config, base_param)
-print("Done.\n")
+tmp_file = f"{base_param['symbol']}_TMP.csv"
+assert os.path.exists(tmp_file), \
+    f"Cached data not found: {tmp_file}. Run a full training session first to populate the cache."
+print(f"Using cached data from {tmp_file}\n")
 
 # ── RUN 1: shuffle=False (new fix) ───────────────────────────────────────────
 print("─── RUN 1: shuffle_splits=False (new/fixed) ───")

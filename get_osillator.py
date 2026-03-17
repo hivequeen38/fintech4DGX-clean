@@ -34,9 +34,13 @@ def get_latest_pdf_email_oscillator(input_date_str: str):
     """
 
     # 1. Connect to IMAP
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-    mail.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
-    mail.select("INBOX")
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, timeout=15)
+        mail.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
+        mail.select("INBOX")
+    except Exception as _e:
+        print(f"[WARN] IMAP connection failed ({_e}) — skipping oscillator lookup")
+        return None
 
     # 2. Search for today's email by subject/sender
     # IMAP search format:
@@ -124,9 +128,13 @@ def get_specific_date_pdf_email_oscillator(input_date_str: str):
         return None, None
 
     # 1. Connect to IMAP
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-    mail.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
-    mail.select("INBOX")
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, timeout=15)
+        mail.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
+        mail.select("INBOX")
+    except Exception as _e:
+        print(f"[WARN] IMAP connection failed ({_e}) — skipping oscillator lookup")
+        return None, None
 
     # 2. Search for emails by subject
     status, email_ids = mail.search(None, "(SUBJECT \"Short Range Oscillator\")")

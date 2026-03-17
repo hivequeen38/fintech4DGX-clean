@@ -93,10 +93,14 @@ TICKER_PARAMS = [
     (APP_param.reference,               'transformer'),
     (APP_param.AAII_option_vol_ratio,   'transformer'),
     (APP_param.reference_no_shuffle,    'transformer'),
+    (APP_param.mz_reference,            'trans_mz'),
+    # CRDO
+    (CRDO_param.mz_reference,           'trans_mz'),
     # INOD
     (INOD_param.reference,              'transformer'),
     (INOD_param.AAII_option_vol_ratio,  'transformer'),
     (INOD_param.reference_no_shuffle,   'transformer'),
+    (INOD_param.mz_reference,           'trans_mz'),
 ]
 
 BACKFILL_SYMBOLS = ['NVDA', 'PLTR', 'APP', 'CRDO', 'INOD']
@@ -229,13 +233,16 @@ if not args.skip_train:
     _train(INOD_param.reference_no_shuffle, end_date=today_date_str, input_comment='(ref_noshuf)+eps_rev+cp_prop')
     get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
 
-    # ── MZ (multi-horizon) runs — NVDA + PLTR only ────────────────────────────
-    step_banner('Training: trans_mz (NVDA + PLTR)')
+    # ── MZ (multi-horizon) runs — all 5 tickers ───────────────────────────────
+    step_banner('Training: trans_mz (all 5 tickers)')
     _train(NVDA_param.mz_reference, end_date=today_date_str, model_type='trans_mz', input_comment='(mh_mz)+eps_rev+cp_prop')
     # TODO(tuning): change mz_reference → mz_reference_v2 below to activate PLTR MZ v2
     _train(PLTR_param.mz_reference, end_date=today_date_str, model_type='trans_mz', input_comment='(mh_mz)+eps_rev+cp_prop')
     # mainDeltafromToday.main(PLTR_param.mz_reference_v2, end_date=today_date_str,
     #                         model_type='trans_mz', input_comment='(mh_mz_v2)')
+    _train(APP_param.mz_reference,  end_date=today_date_str, model_type='trans_mz', input_comment='(mh_mz)+eps_rev+cp_prop')
+    _train(CRDO_param.mz_reference, end_date=today_date_str, model_type='trans_mz', input_comment='(mh_mz)+eps_rev+cp_prop')
+    _train(INOD_param.mz_reference, end_date=today_date_str, model_type='trans_mz', input_comment='(mh_mz)+eps_rev+cp_prop')
     get_historical_html.upload_all_results(today_date_str, upload_to_cloud=upload_to_cloud)
 
     # ── GBDT lgbm_reference — all 5 tickers ───────────────────────────────────

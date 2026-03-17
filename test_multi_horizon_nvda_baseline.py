@@ -109,8 +109,7 @@ def test_nvda_multi_horizon_vs_baseline(tmp_path):
         'model_name':    'NVDA_mh_test',
         'shuffle_splits': False,
         'num_horizons':   NUM_HORIZONS,
-        # Reduce epochs for test speed; production would use 200
-        'num_epochs':    50,
+        'num_epochs':    200,
     }
 
     assert not mh_param.get('shuffle_splits', False), \
@@ -136,7 +135,7 @@ def test_nvda_multi_horizon_vs_baseline(tmp_path):
     print(f"\n{'='*60}")
     print("Training MultiHorizonTransformer on NVDA (test run)...")
     print(f"  save_dir = {test_save_dir}")
-    print(f"  num_epochs = {mh_param['num_epochs']}  (reduced for test speed)")
+    print(f"  num_epochs = {mh_param['num_epochs']}")
     print(f"{'='*60}")
 
     model, test_preds, test_labels, model_path, scaler_path = analyze_trend_multi_horizon(

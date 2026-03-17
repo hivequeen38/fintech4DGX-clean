@@ -248,10 +248,17 @@ def download_data(config, param, use_global_cache=False):
     else:
         df['vix_rv_ratio'] = np.nan
 
+    # Overnight gap features — zero new infrastructure, uses existing OHLCV
+    # overnight_gap = (open(T) - close(T-1)) / close(T-1): captures earnings/macro shocks
+    df['overnight_gap'] = (df['open'] - df['close'].shift(1)) / df['close'].shift(1)
+    df['overnight_gap_5d_mean'] = df['overnight_gap'].rolling(5).mean()
+    df['overnight_gap_5d_std']  = df['overnight_gap'].rolling(5).std()
+    df['overnight_gap_5d_abs']  = df['overnight_gap'].abs().rolling(5).mean()
+
     # merge all the features together
     df = etl.fill_data(df)
-    
- 
+
+
     return df, num_data_points, display_date_range
 
 def calculate_regime(df: DataFrame)-> DataFrame:

@@ -37,5 +37,10 @@ config = {
     },
     "eodhd": {
 
+    },
+    "fred": {
+        # Free FRED API key — register at https://fred.stlouisfed.org/docs/api/api_key.html
+        # (takes ~30 seconds, no credit card needed)
+        "key": "3cbe48049c43ef16c97f9f4906bff77c"
     }
 }

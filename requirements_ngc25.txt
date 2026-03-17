@@ -21,6 +21,7 @@ vonage==3.13.0
 # ML utilities (may already be in container, safe to re-run)
 scikit-learn==1.3.2
 joblib==1.3.2
+lightgbm==4.6.0
 shap==0.46.0
 
 # Viz

@@ -168,6 +168,7 @@ librmm @ file:///rapids/librmm-24.8.0-py3-none-linux_aarch64.whl#sha256=27d0f11b
 librosa==0.10.1
 lightning-thunder==0.2.0.dev0
 lightning-utilities==0.11.7
+lightgbm==4.6.0
 lintrunner==0.12.5
 llvmlite==0.43.0
 locket @ file:///rapids/locket-1.0.0-py2.py3-none-any.whl#sha256=b6c819a722f7b6bd955b80781788e4a66a55628b858d347536b7e81325a3a5e3

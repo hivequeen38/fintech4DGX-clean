@@ -48,6 +48,14 @@ AAII_option_vol_ratio = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -236,6 +244,14 @@ AAII_reference_test = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -420,6 +436,14 @@ AAII_Min_features = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -592,6 +616,14 @@ AAII_reference = {
         ##################################
         'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+
+        ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
 
         ##################################
         # Realized volatility features
@@ -779,6 +811,14 @@ reference = {
         ##################################
         'ret_5d_rel_SPY',   # stock 5d return minus SPY 5d return
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
+
+        ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
 
         ##################################
         # Realized volatility features

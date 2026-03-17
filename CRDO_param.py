@@ -52,6 +52,14 @@ AAII_option_vol_ratio = {
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -285,6 +293,14 @@ AAII_reference = {
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -513,6 +529,14 @@ reference = {
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -691,4 +715,15 @@ reference_no_shuffle = {
     "dropout_rate":      0.2,         # was 0.1 — more regularization
     "l2_weight_decay":   3.2e-05,     # was 1.6e-05
     "note":              "batch-shuffle+dropout0.2+L2x2 for cross-regime generalization",
+}
+mz_reference = {
+    **reference,
+    "model_name":      "mz_reference",
+    "shuffle_splits":  False,   # MH always uses chronological split
+    "batch_size":      64,      # MZ: reduced for better gradient signal
+    "num_layers":      3,       # MZ: increased for extra capacity
+    "dropout_rate":    0.2,     # MZ: increased to regularize deeper model
+    "l1_lambda":       5e-6,    # MZ: relaxed from 1e-6
+    "l2_weight_decay": 2e-5,    # MZ: relaxed from 1.6e-5
+    "num_zones":       15,      # MZ: number of prediction horizons
 }

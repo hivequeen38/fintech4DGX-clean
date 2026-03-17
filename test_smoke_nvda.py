@@ -39,7 +39,9 @@ def run_nvda_target1():
     param['target_size'] = TARGET_SIZE
     param['threshold'] = 0.03  # first-5-day threshold
 
-    trendAnalysisFromTodayNew.load_data_to_cache(trendConfig.config, param)
+    tmp_file = f"{SYMBOL}_TMP.csv"
+    assert os.path.exists(tmp_file), \
+        f"Cached data not found: {tmp_file}. Run a full training session first to populate the cache."
 
     incr_df = pd.DataFrame(columns=[
         'date', 'close',

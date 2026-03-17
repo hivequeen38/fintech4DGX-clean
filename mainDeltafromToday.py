@@ -89,7 +89,7 @@ def fetchDateAndClosing(param: dict[str, any]):
         return fallback_date, last_close, last_cp_vol, last_options_vol
 
 # process result files
-def processDeltaFromTodayResults( symbol: str, incr_df: DataFrame, dateStr: str, closingPrice: float, comment: str, last_cp_vol: float, param: dict[str], last_vol_ratio=None):
+def processDeltaFromTodayResults( symbol: str, incr_df: DataFrame, dateStr: str, closingPrice: float, comment: str, last_cp_vol: float, param: dict[str], last_vol_ratio=None, model_type: str = 'transformer'):
     file_path = symbol+ "_" + "15d_from_today_predictions.csv"
     num_of_days = 15
     df: DataFrame
@@ -97,7 +97,12 @@ def processDeltaFromTodayResults( symbol: str, incr_df: DataFrame, dateStr: str,
     if os.path.isfile(file_path):
         # file exist
         df = pd.read_csv(file_path,index_col=False)
-        # df['date'] = pd.to_datetime(df['date'])  # Convert to datetime if it's not already
+        # Deduplicate: drop existing rows with the same date AND same model (comment prefix
+        # before " RD="). This preserves rows from different param sets on the same date
+        # while making re-runs idempotent (second inference doesn't create duplicate rows).
+        comment_key = comment.split(' RD=')[0] if ' RD=' in comment else comment
+        mask = (df['date'] == dateStr) & (df['comment'].astype(str).str.startswith(comment_key))
+        df = df[~mask].reset_index(drop=True)
     else:
         columns = []
         columns.insert(0, 'date')
@@ -128,7 +133,9 @@ def processDeltaFromTodayResults( symbol: str, incr_df: DataFrame, dateStr: str,
         last_vol_ratio_str = f"{float(last_vol_ratio):.2f}"
         comment = comment + ' O/PS= ' + last_vol_ratio_str + '%'
 
-    df.loc[len(df)-1, 'comment'] = comment 
+    df.loc[len(df)-1, 'comment']    = comment
+    df.loc[len(df)-1, 'model_type'] = model_type
+    df.loc[len(df)-1, 'profile']    = param.get('model_name', '')
 
     # now store this back to disk
     df.to_csv(file_path, index=False, header=True) # we want to save the date index
@@ -259,7 +266,8 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
         input_comment = '(' + param.get("model_name", model_type) + ')'
 
     # load today's data (common to all model types)
-    if load_cache == True:
+    # lgbm reads TMP.csv directly inside gbdt_pipeline — skip the Transformer cache loader.
+    if load_cache == True and model_type != 'lgbm':
         trendAnalysisFromTodayNew.load_data_to_cache(trendConfig.config, param)
 
     if model_type == "transformer":
@@ -270,7 +278,8 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
         incr_df = incr_df.reset_index(drop=True)
 
         # for first 5 days at 3%, then rest of the 15 days at 5%
-        comment = f'(tra)({param["model_name"]}) RD={run_date}'
+        _note = param.get('note', '')
+        comment = f'(tra)({param["model_name"]}) RD={run_date}' + (f' [{_note}]' if _note else '')
 
         use_time_split = param.get('use_time_split', False)
 
@@ -329,15 +338,22 @@ def main(param: dict[str], end_date: str=None, run_date=None, input_comment=None
             save_dir=None,   # production: writes to model/
         )
 
+    elif model_type == "lgbm":
+        # LightGBM GBDT pipeline — trains 15 horizon classifiers per param set.
+        # Reads {SYMBOL}_TMP.csv directly; does NOT use the Transformer cache loader.
+        import gbdt_pipeline
+        gbdt_pipeline.train(param)
+
     else:
         raise ValueError(
             f"Unknown model_type: '{model_type}'. "
-            f"Supported types: ['transformer', 'trans_mz']"
+            f"Supported types: ['transformer', 'trans_mz', 'lgbm']"
         )
 
 #########################################
-# MAIN LOOP enters here for training
-def inference(param: dict[str], end_date: str=None, run_date=None, input_comment=None, load_cache=True):
+# MAIN LOOP enters here for inference
+def inference(param: dict[str], end_date: str=None, run_date=None, input_comment=None, load_cache=True,
+              model_type: str = "transformer"):
     logging.basicConfig(level=logging.INFO)
 
     eastern = pytz.timezone('US/Eastern')
@@ -352,28 +368,97 @@ def inference(param: dict[str], end_date: str=None, run_date=None, input_comment
         input_comment = ''
 
     # load today's data (full re-fetch, same as training — skips training loop)
-    if load_cache == True:
+    # lgbm and trans_mz read TMP.csv directly — skip the Transformer cache loader.
+    if load_cache == True and model_type not in ('lgbm', 'trans_mz'):
         trendAnalysisFromTodayNew.load_data_to_cache(trendConfig.config, param)
+
+    if model_type == "lgbm":
+        # LightGBM GBDT inference — loads saved horizon models and writes CSV predictions.
+        import gbdt_pipeline
+        gbdt_pipeline.infer(param, end_date=end_date)
+        return
+
+    if model_type == "trans_mz":
+        # MultiHorizonTransformer inference — single model predicts all 15 horizons at once.
+        mz_param = {**param}
+        mz_param.setdefault('model_type', 'multi_horizon_transformer')
+        mz_param.setdefault('num_horizons', 15)
+        mz_param.setdefault('shuffle_splits', False)
+        mz_param.setdefault('model_name', 'mh_mz')
+
+        _note   = mz_param.get('note', '')
+        comment = f'(inf)({mz_param["model_name"]}) RD={run_date}' + (f' [{_note}]' if _note else '')
+        if input_comment:
+            comment = comment + ' ' + input_comment
+
+        input_col = ['date', 'close', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7',
+                     'p8', 'p9', 'p10', 'p11', 'p12', 'p13', 'p14', 'p15', 'comment']
+        incr_df = pd.DataFrame(columns=input_col).reset_index(drop=True)
+
+        trendAnalysisFromTodayNew.make_inference_multi_horizon(
+            config=trendConfig.config,
+            param=mz_param,
+            incr_df=incr_df,
+            turn_random_on=False,
+            use_cached_data=True,
+        )
+
+        dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(mz_param)
+        processDeltaFromTodayResults(
+            mz_param['symbol'], incr_df, dateStr, closing_price,
+            comment, last_cp_vol, mz_param, last_vol_ratio,
+            model_type='trans_mz',
+        )
+        return
 
     #  DO FIXED SEED
     #
+    import time as _time
+    _RETRY_INTERVAL_S = 5 * 60   # 5 minutes between retries
+    _RETRY_MAX_S      = 30 * 60  # give up after 30 minutes total
+
     input_col = ['date', 'close', 'p1', 'p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15', 'comment']
-    incr_df = pd.DataFrame(columns=input_col)
-    incr_df = incr_df.reset_index(drop=True)
 
     # for first 5 days at 3%, then rest of the 15 days at 5%
-    comment = f'(inf)({param["model_name"]}) RD={run_date}'
-    param["threshold"] = 0.03
-    inference_first_5_days(param, incr_df, False, comment)
+    _note = param.get('note', '')
+    comment = f'(inf)({param["model_name"]}) RD={run_date}' + (f' [{_note}]' if _note else '')
 
-    param["threshold"] = 0.05
-    inference_last_10_days(param, incr_df, False, comment)
+    _sym  = param['symbol']
+    _name = param.get('model_name', '')
+    _retry_start = _time.time()
+    _attempt = 0
+    while True:
+        _attempt += 1
+        incr_df = pd.DataFrame(columns=input_col)
+        incr_df = incr_df.reset_index(drop=True)
 
-    # at this point there are 15x individual result files that's been updated.
-    # grab the current date and the closing price from the first one
-    # NVDA_1d_predictions_test.csv
-    #
-    dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(param)
+        param["threshold"] = 0.03
+        inference_first_5_days(param, incr_df, False, comment)
+        param["threshold"] = 0.05
+        inference_last_10_days(param, incr_df, False, comment)
+
+        # at this point there are 15x individual result files that's been updated.
+        # grab the current date and the closing price from the first one
+        dateStr, closing_price, last_cp_vol, last_vol_ratio = fetchDateAndClosing(param)
+
+        if dateStr == end_date:
+            break  # today's data is available — proceed normally
+
+        # Data for end_date not yet available — decide whether to retry
+        elapsed = _time.time() - _retry_start
+        remaining = _RETRY_MAX_S - elapsed
+        if remaining <= _RETRY_INTERVAL_S:
+            print(f"[RETRY] {_sym}/{_name}: {end_date} data still unavailable after "
+                  f"{_attempt} attempt(s) ({elapsed/60:.0f} min elapsed) — "
+                  f"proceeding with fallback date {dateStr}")
+            break
+        print(f"[RETRY] {_sym}/{_name}: {end_date} data not yet available "
+              f"(attempt {_attempt}, {elapsed/60:.0f} min elapsed) — "
+              f"retrying in 5 min...")
+        _time.sleep(_RETRY_INTERVAL_S)
+        # Re-fetch fresh data before next attempt
+        trendAnalysisFromTodayNew.load_data_to_cache(trendConfig.config, param)
+
     processDeltaFromTodayResults(param["symbol"], incr_df, dateStr, closing_price, comment, last_cp_vol, param, last_vol_ratio)
 
     # # RANDOM SEED

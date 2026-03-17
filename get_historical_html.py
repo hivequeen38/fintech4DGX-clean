@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import pandas as pd
 from typing import Optional
 from bs4 import BeautifulSoup
@@ -7,6 +8,79 @@ from datetime import datetime
 import pytz
 import google_cloud_util
 import get_osillator
+
+F1_HISTORY_PATH = '/workspace/f1_best_history.json'
+_DN_THRESH = 0.05
+_UP_THRESH = 0.05
+
+
+def _load_f1_history() -> dict:
+    try:
+        return json.load(open(F1_HISTORY_PATH))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _efficacy_suffix(symbol: str, profile: str, history: dict) -> str:
+    """
+    Return a compact efficacy string to append to a comment cell, e.g.:
+      ' | F1[m=0.764 UP=0.882 DN=0.825] ★best'
+      ' | F1[m=0.205 UP=0.544 noDN]'
+      ' | F1[m=0.292 DN=0.227(only) UP=0.480]'
+    Returns '' if no history found for this (symbol, profile).
+    """
+    sym_hist = history.get(symbol, {})
+    entry = sym_hist.get(profile)
+    if not entry:
+        return ''
+
+    macro = entry.get('macro', 0.0)
+    up    = entry.get('up',    0.0)
+    dn    = entry.get('dn',    0.0)
+
+    # Determine if this profile is the macro leader among all stored profiles
+    all_macros = [v.get('macro', 0.0) for v in sym_hist.values()]
+    is_best = macro == max(all_macros) if all_macros else False
+
+    # DN signal
+    has_dn = dn >= _DN_THRESH
+    other_dn = any(
+        k != profile and sym_hist[k].get('dn', 0.0) >= _DN_THRESH
+        for k in sym_hist
+    )
+    if has_dn and not other_dn:
+        dn_str = f'DN={dn:.3f}(only)'
+    elif has_dn:
+        dn_str = f'DN={dn:.3f}'
+    else:
+        dn_str = 'noDN'
+
+    # UP signal
+    up_str = f'UP={up:.3f}' if up >= _UP_THRESH else 'noUP'
+
+    parts = [f'm={macro:.3f}', up_str, dn_str]
+    tag = ' ★best' if is_best else ''
+    return f' | F1[{" ".join(parts)}]{tag}'
+
+
+def _append_f1_efficacy(df: pd.DataFrame, symbol: str, history: dict) -> pd.DataFrame:
+    """
+    Append a compact F1 efficacy note to the comment column for each row
+    that has a recognisable 'profile' value.  Returns a copy of df.
+    """
+    df = df.copy()
+    if 'profile' not in df.columns:
+        return df
+
+    def _augment(row):
+        profile = str(row.get('profile', ''))
+        if not profile or profile == 'nan':
+            return row['comment']
+        suffix = _efficacy_suffix(symbol, profile, history)
+        return str(row['comment']) + suffix
+
+    df['comment'] = df.apply(_augment, axis=1)
+    return df
 
 INITIAL_HTML = """<!DOCTYPE html>
 <html>
@@ -384,6 +458,43 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
             .noshuf-row .comment {{
                 color: #ffffff;
             }}
+            .gbdt-row {{
+                background-color: #0f4c5c;
+                color: #ffffff;
+            }}
+            .gbdt-row .up {{
+                color: #6ee7b7;
+                font-weight: bold;
+            }}
+            .gbdt-row .down {{
+                color: #fca5a5;
+                font-weight: bold;
+            }}
+            .gbdt-row .neutral {{
+                color: #a0d8e8;
+            }}
+            .gbdt-row .comment {{
+                color: #e0f2fe;
+            }}
+            .legend {{
+                margin-top: 10px;
+                padding: 8px 12px;
+                font-size: 0.85em;
+                color: #4a5568;
+                border-top: 1px solid #e2e8f0;
+            }}
+            .legend-item {{
+                display: inline-block;
+                margin-right: 18px;
+            }}
+            .legend-swatch {{
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                border-radius: 2px;
+                margin-right: 4px;
+                vertical-align: middle;
+            }}
             .oscillator {{
                 margin-top: 20px;
                 text-align: right;
@@ -414,6 +525,12 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
                     {table_rows}
                 </tbody>
             </table>
+            <div class="legend">
+                <span class="legend-item"><span class="legend-swatch" style="background:#000000;"></span>reference</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#fef08a; border:1px solid #999;"></span>AAII</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#dc2626;"></span>ref_noshuf</span>
+                <span class="legend-item"><span class="legend-swatch" style="background:#0f4c5c;"></span>GBDT</span>
+            </div>
             {oscillator_section}
         </div>
     </body>
@@ -439,34 +556,62 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
         # Check if this is a new date
         is_new_date = previous_date is not None and current_date != previous_date
 
-        # Determine model type from comment for row color coding
+        # Determine row type — prefer explicit 'profile' column, fall back to comment parse
         comment_str = str(row.comment)
-        if 'noshuf' in comment_str or 'no_shuffle' in comment_str:
-            row_type = 'noshuf'
-        elif 'AAII' in comment_str:
-            row_type = 'aaii'
-        else:
-            row_type = 'reference'
+        profile     = str(getattr(row, 'profile',    ''))
+        model_type  = str(getattr(row, 'model_type', ''))
+        legacy      = not profile or profile == 'nan'
+        if not legacy:
+            if 'noshuf' in profile or 'no_shuffle' in profile:
+                row_type = 'noshuf'
+            elif 'AAII' in profile:
+                row_type = 'aaii'
+            elif model_type == 'lgbm':
+                row_type = 'gbdt'
+            else:
+                row_type = 'reference'
+        else:   # legacy rows — parse comment string
+            if 'noshuf' in comment_str or 'no_shuffle' in comment_str:
+                row_type = 'noshuf'
+            elif 'AAII' in comment_str:
+                row_type = 'aaii'
+            else:
+                row_type = 'reference'
 
         # Add date and close
         cells.append(f'<td>{current_date}</td>')
-        cells.append(f'<td>{row.close}</td>')
+        close_display = '—' if (str(row.close) == 'nan' or str(row.close) == '') else row.close
+        cells.append(f'<td>{close_display}</td>')
 
         # Add predictions (p1-p15)
+        is_gbdt = (row_type == 'gbdt')
         for i in range(1, 16):
             value = getattr(row, f'p{i}')
-            class_name = ''
-            if value == 'UP':
-                class_name = 'up'
-            elif value == 'DN':
-                class_name = 'down'
+            if is_gbdt:
+                # GBDT rows carry P_up as a decimal — threshold to UP/DN/__ for consistency
+                try:
+                    pup = float(value)
+                    if pup >= 0.5:
+                        class_name, cell_text = 'up',      'UP'
+                    elif pup <= 0.3:
+                        class_name, cell_text = 'down',    'DN'
+                    else:
+                        class_name, cell_text = 'neutral', '__'
+                except (ValueError, TypeError):
+                    class_name, cell_text = 'neutral', str(value)
             else:
-                class_name = 'neutral'
-            cells.append(f'<td class="{class_name}">{value}</td>')
+                cell_text  = str(value)
+                if value == 'UP':
+                    class_name = 'up'
+                elif value == 'DN':
+                    class_name = 'down'
+                else:
+                    class_name = 'neutral'
+            cells.append(f'<td class="{class_name}">{cell_text}</td>')
 
         # Add comment with left alignment
         cells.append(f'<td class="comment" style="text-align: left; padding-left: 10px;">{row.comment}</td>')
-        
+
         # Determine row classes
         row_classes = []
         if is_new_date:
@@ -475,6 +620,8 @@ def create_historical_html_table(df: pd.DataFrame, symbol: str, oscillator_value
             row_classes.append("noshuf-row")
         elif row_type == 'aaii':
             row_classes.append("aaii-row")
+        elif row_type == 'gbdt':
+            row_classes.append("gbdt-row")
         else:
             row_classes.append("reference-row")
         
@@ -725,6 +872,7 @@ def upload_all_results(input_date_str: str = None, upload_to_cloud: bool = True)
 
     oscillator_input = get_osillator.get_oscillator(input_date_str)
     stocks = ['NVDA', 'PLTR', 'CRDO', 'INOD', 'APP']
+    f1_history = _load_f1_history()
 
     # Always rebuild stock_trends.html from the local template — never use an existing/cloud copy
     with open("stock_trends.html", 'w', encoding='utf-8') as f:
@@ -735,12 +883,36 @@ def upload_all_results(input_date_str: str = None, upload_to_cloud: bool = True)
         recent_df = get_recent_entries(df, 16)
 
         # filter out all (QA) entries
-        # Create mask for rows that don't contain the phrase
-        # delete checking for closeing bracket)
         mask = ~recent_df['comment'].str.contains('QA', na=False)
-
-        # Apply mask to get filtered DataFrame
         filtered_df = recent_df[mask]
+
+        # Merge GBDT summary rows if the GBDT CSV exists
+        gbdt_path = f'{stock}_gbdt_15d_from_today_predictions.csv'
+        if os.path.exists(gbdt_path):
+            try:
+                gbdt_raw = pd.read_csv(gbdt_path)
+                gbdt_rows = []
+                for date_val, grp in gbdt_raw.groupby('date', sort=False):
+                    # Pivot: one row per date, p1..p15 = P_up for each horizon
+                    grp_h = grp.set_index('h')
+                    summary = {'date': date_val, 'close': float('nan')}
+                    for h in range(1, 16):
+                        summary[f'p{h}'] = grp_h.loc[h, 'P_up'] if h in grp_h.index else float('nan')
+                    score  = grp['score'].iloc[0]  if 'score'  in grp.columns else float('nan')
+                    signal = int(grp['signal'].iloc[0]) if 'signal' in grp.columns else 0
+                    profile_val = grp['profile'].iloc[0] if 'profile' in grp.columns else 'lgbm_reference'
+                    summary['comment']    = f'lgbm | score={score:.2f} | signal={signal}'
+                    summary['model_type'] = 'lgbm'
+                    summary['profile']    = profile_val
+                    gbdt_rows.append(summary)
+                if gbdt_rows:
+                    gbdt_df = pd.DataFrame(gbdt_rows)
+                    filtered_df = pd.concat([filtered_df, gbdt_df], ignore_index=True)
+            except Exception as _e:
+                print(f'[WARN] GBDT merge skipped for {stock}: {_e}')
+
+        # Append F1 efficacy notes to comment column
+        filtered_df = _append_f1_efficacy(filtered_df, stock, f1_history)
 
         # Generate the HTML file
         output_file = generate_historical_html(

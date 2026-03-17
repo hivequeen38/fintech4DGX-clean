@@ -53,6 +53,14 @@ AAII_option_vol_ratio = {
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -290,6 +298,14 @@ AAII_reference = {
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -516,6 +532,14 @@ reference = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
         'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
+
+        ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
 
         ##################################
         # Realized volatility features
@@ -751,6 +775,14 @@ mz_reference = {
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
 
         ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
+
+        ##################################
         # Realized volatility features
         ##################################
         'rv_10d',         # 10-day annualized realized vol (%)
@@ -967,6 +999,14 @@ AAII_all = {
         'ret_10d_rel_SPY',  # stock 10d return minus SPY 10d return
         'ret_5d_rel_SMH',   # stock 5d return minus SMH 5d return (semiconductor sector alpha)
         'ret_10d_rel_SMH',  # stock 10d return minus SMH 10d return (semiconductor sector alpha)
+
+        ##################################
+        # Overnight gap features
+        ##################################
+        'overnight_gap',         # (open(T) - close(T-1)) / close(T-1) — news shock proxy
+        'overnight_gap_5d_mean', # 5d rolling mean — persistent gap bias / news flow
+        'overnight_gap_5d_std',  # 5d rolling std  — gap volatility regime
+        'overnight_gap_5d_abs',  # 5d rolling mean(|gap|) — magnitude regardless of direction
 
         ##################################
         # Realized volatility features
